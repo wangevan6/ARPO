@@ -37,7 +37,9 @@
 
 ## 🌟 Agentic RL Family
 
-👏 Welcome to try our agentic RL series of algorithms:
+<details open><summary>👏 Welcome to try our agentic RL series of algorithms: </summary><p>
+<!--  may -->
+
 
 [1] [**Agentic Entropy-Balanced Policy Optimization**]()
 
@@ -49,6 +51,11 @@
 [3] [**Tool-Star: Empowering LLM-Brained Multi-Tool Reasoner via Reinforcement Learning**](https://arxiv.org/abs/2505.16410)
 
 
+> [**LanguageBind: Extending Video-Language Pretraining to N-modality by Language-based Semantic Alignment**](https://arxiv.org/abs/2310.01852) <br>
+> Bin Zhu, Bin Lin, Munan Ning, Yang Yan, Jiaxi Cui, HongFa Wang, Yatian Pang, Wenhao Jiang, Junwu Zhang, Zongwei Li, Wancai Zhang, Zhifeng Li, Wei Liu, Li Yuan <br>
+[![github](https://img.shields.io/badge/-Github-black?logo=github)](https://github.com/PKU-YuanGroup/LanguageBind)  [![github](https://img.shields.io/github/stars/PKU-YuanGroup/LanguageBind.svg?style=social)](https://github.com/PKU-YuanGroup/LanguageBind)  [![arXiv](https://img.shields.io/badge/Arxiv-2310.01852-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2310.01852) <br>
+
+</p></details>
 
 
 ## 📣 Latest News
