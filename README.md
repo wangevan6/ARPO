@@ -41,10 +41,11 @@
 
 [1] [**Agentic Entropy-Balanced Policy Optimization**]()
 
+
 [2] [**Agentic Reinforced Policy Optimization**](https://arxiv.org/abs/2507.19849)
+[Github] [🤗HF-paper](https://huggingface.co/papers/2507.19849)
 
-
-[3] **Tool-Star: Empowering LLM-Brained Multi-Tool Reasoner via Reinforcement Learning**
+[3] [**Tool-Star: Empowering LLM-Brained Multi-Tool Reasoner via Reinforcement Learning**](https://arxiv.org/abs/2505.16410)
 
 
 
