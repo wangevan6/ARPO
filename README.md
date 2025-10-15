@@ -29,7 +29,7 @@
 
 
 > [**Agentic Entropy-Balanced Policy Optimization**]() <br>
-[![github](https://img.shields.io/badge/-Github-black?logo=github)](https://github.com/RUC-NLPIR/ARPO) [![github](https://img.shields.io/github/stars/RUC-NLPIR/ARPO.svg?style=social)](https://github.com/RUC-NLPIR/ARPO) [![arXiv](https://img.shields.io/badge/Arxiv-2507.19849-b31b1b.svg?logo=arXiv)]() [![Paper](https://img.shields.io/badge/Hugging%20Face-Paper-yellow?logo=huggingface)]() [![Collection](https://img.shields.io/badge/HF-Collection-yellow?logo=huggingface)](https://huggingface.co/collections/dongguanting/aepo-68ef6832c99697ee03d5e1c7) [![X (formerly Twitter) URL](https://img.shields.io/twitter/url?url=https%3A%2F%2Fx.com%2FKevin_GuoweiXu%2Fstatus%2F1858338565463421244)]()
+[![github](https://img.shields.io/badge/-Github-black?logo=github)](https://github.com/RUC-NLPIR/ARPO) [![github](https://img.shields.io/github/stars/RUC-NLPIR/ARPO.svg?style=social)](https://github.com/RUC-NLPIR/ARPO) [![arXiv](https://img.shields.io/badge/Arxiv-2507.19849-b31b1b.svg?logo=arXiv)]() [![Paper](https://img.shields.io/badge/Hugging%20Face-Paper-yellow?logo=huggingface)]() [![Collection](https://img.shields.io/badge/HF-Dataset%20&%20Models-yellow?logo=huggingface)](https://huggingface.co/collections/dongguanting/aepo-68ef6832c99697ee03d5e1c7) [![X (formerly Twitter) URL](https://img.shields.io/twitter/url?url=https%3A%2F%2Fx.com%2FKevin_GuoweiXu%2Fstatus%2F1858338565463421244)]()
 
 
 > [**Agentic Reinforced Policy Optimization**](https://arxiv.org/abs/2507.19849) <br>
