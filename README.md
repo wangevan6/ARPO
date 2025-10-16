@@ -34,11 +34,20 @@
 <p align="center">
 
 <img src="./assets/x.png" width="14px" style="display:inline;"> <a href="https://x.com/kakakbibibi/status/1950211490943832393" target="_blank">X@AK</a> ｜
-[X](https://x.com/kakakbibibi/status/1950211490943832393) ｜ 
-[WeChat](https://mp.weixin.qq.com/s/mFNRs-bHCAAe3x4QZHF8aA) ｜
-[Zhihu](https://zhuanlan.zhihu.com/p/1938022709545141501) ｜ 
-[YouTube](https://www.youtube.com/watch?v=FOK2tRtq7TE) ｜
-[Xiaohongshu](https://www.xiaohongshu.com/explore/68885b6b000000002501bb5e?xsec_token=ABhbOv-GAqL62zxhidTntouED470HN18Wk3e980-_uwtI=&xsec_source=pc_user)
+
+<img src="./assets/x.png" width="14px" style="display:inline;"> <a href="https://x.com/jiqizhixin/status/1950440523107619136" target="_blank">X@机器之心</a> ｜
+
+<img src="./assets/weixin.png" width="14px" style="display:inline;"> <a href="https://mp.weixin.qq.com/s/mFNRs-bHCAAe3x4QZHF8aA" target="_blank">WeChat@机器之心</a> ｜
+
+
+
+<img src="./assets/zhihu.png" width="14px" style="display:inline;"> <a href="https://zhuanlan.zhihu.com/p/1938022709545141501" target="_blank">Zhihu</a> ｜
+
+
+<img src="./assets/YouTube.png" width="14px" style="display:inline;"> <a href="https://www.youtube.com/watch?v=FOK2tRtq7TE" target="_blank">YouTube</a> ｜
+
+<img src="./assets/xiaohongshu.png" width="14px" style="display:inline;"> <a href="https://www.youtube.com/watch?v=FOK2tRtq7TE" target="_blank">Xiaohongshu</a> ｜
+
 <p align="center">
 
 > [!NOTE]
