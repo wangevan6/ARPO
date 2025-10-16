@@ -32,7 +32,7 @@
 <p align="center">
 
 > [!NOTE]
-> This project includes the codebase and open-sourced datasets and cehckpoints for two RL algorithms: **Agentic Reinforced Policy Optimization (ARPO)** and **Agentic Entropy-Balanced Policy Optimization (AEPO)**. We will continue to iterate and expand our Agentic RL series.
+> This project includes the codebase, datasets and chckpoints for two RL algorithms: **Agentic Reinforced Policy Optimization (ARPO)** and **Agentic Entropy-Balanced Policy Optimization (AEPO)**. We will continue to iterate and expand our Agentic RL series.
 
 
 
