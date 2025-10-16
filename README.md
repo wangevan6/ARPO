@@ -38,7 +38,7 @@
   <img src="./assets/weixin.png" width="14px" style="display:inline;"> <a href="https://mp.weixin.qq.com/s/mFNRs-bHCAAe3x4QZHF8aA" target="_blank">WeChat@机器之心</a> ｜
 <img src="./assets/zhihu.png" width="14px" style="display:inline;"> <a href="https://zhuanlan.zhihu.com/p/1938022709545141501" target="_blank">Zhihu</a> ｜
 <img src="./assets/YouTube.png" width="14px" style="display:inline;"> <a href="https://www.youtube.com/watch?v=FOK2tRtq7TE" target="_blank">YouTube</a> ｜
-<img src="./assets/xiaohongshu.png" width="14px" style="display:inline;"> <a href="https://www.youtube.com/watch?v=FOK2tRtq7TE" target="_blank">Xiaohongshu</a> ｜
+<img src="./assets/xiaohongshu.png" width="14px" style="display:inline;"> <a href="https://www.xiaohongshu.com/explore/68885b6b000000002501bb5e?xsec_token=ABhbOv-GAqL62zxhidTntouIOJqDraaIMAUINlNUWmEtU=&xsec_source=pc_user" target="_blank">Xiaohongshu</a> ｜
 <p align="center">
 
 > [!NOTE]
