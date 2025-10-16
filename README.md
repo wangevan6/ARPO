@@ -28,8 +28,8 @@
 <p align="center">
 <img src="./assets/arxiv.png" width="14px" style="display:inline;"> <a href="https://arxiv.org/abs/2507.19849" target="_blank">Arxiv(ARPO)</a> ｜
 <img src="./assets/arxiv.png" width="14px" style="display:inline;"> <a href="" target="_blank">Arxiv(AEPO)</a> ｜
-🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">HF-Paper(ARPO)</a> ｜
-🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">HF-Paper(AEPO)</a> ｜
+🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">Paper(ARPO)</a> ｜
+🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">Paper(AEPO)</a> ｜
 🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">Models(ARPO)</a> ｜
 🤗 <a href="https://huggingface.co/collections/dongguanting/aepo-68ef6832c99697ee03d5e1c7" target="_blank">Models(AEPO)</a> ｜
 <p align="center">
