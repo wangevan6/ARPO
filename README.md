@@ -80,9 +80,9 @@
 
 > [**Tool-Star: Empowering LLM-Brained Multi-Tool Reasoner via Reinforcement Learning**](https://arxiv.org/abs/2505.16410) <br>
 > **Authors:** Guanting Dong, Yifei Chen, Xiaoxi Li, Jiajie Jin, Hongjin Qian, Yutao Zhu, Hangyu Mao, Guorui Zhou, Zhicheng Dou†, Ji-Rong Wen <br>
-> **TLDR:** An end-to-end TIR post-training framework that empowers LLMs to autonomously interact with multi-tool environments through Self-Critic RL design<br>
-[![github](https://img.shields.io/badge/-Github-black?logo=github)](https://github.com/RUC-NLPIR/Tool-Star) [![github](https://img.shields.io/github/stars/RUC-NLPIR/Tool-Star.svg?style=social)](https://github.com/RUC-NLPIR/Tool-Star) [![arXiv](https://img.shields.io/badge/Arxiv-2505.16410-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2505.16410) [![Paper](https://img.shields.io/badge/Hugging%20Face-Paper-yellow?logo=huggingface)](https://huggingface.co/papers/2505.16410) [![Collection](https://img.shields.io/badge/Hugging%20Face-Dataset%20&%20Models-yellow?logo=huggingface)](https://huggingface.co/collections/dongguanting/tool-star-682fd73dfa508bf3f40da032) [![X (formerly Twitter) URL](https://img.shields.io/twitter/url?url=https%3A%2F%2Fx.com%2FKevin_GuoweiXu%2Fstatus%2F1858338565463421244)](https://x.com/_akhaliq/status/1925924431676821698)
 
+[![github](https://img.shields.io/badge/-Github-black?logo=github)](https://github.com/RUC-NLPIR/Tool-Star) [![github](https://img.shields.io/github/stars/RUC-NLPIR/Tool-Star.svg?style=social)](https://github.com/RUC-NLPIR/Tool-Star) [![arXiv](https://img.shields.io/badge/Arxiv-2505.16410-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2505.16410) [![Paper](https://img.shields.io/badge/Hugging%20Face-Paper-yellow?logo=huggingface)](https://huggingface.co/papers/2505.16410) [![Collection](https://img.shields.io/badge/Hugging%20Face-Dataset%20&%20Models-yellow?logo=huggingface)](https://huggingface.co/collections/dongguanting/tool-star-682fd73dfa508bf3f40da032) [![X (formerly Twitter) URL](https://img.shields.io/twitter/url?url=https%3A%2F%2Fx.com%2FKevin_GuoweiXu%2Fstatus%2F1858338565463421244)](https://x.com/_akhaliq/status/1925924431676821698)
+> **TLDR:** An end-to-end TIR post-training framework that empowers LLMs to autonomously interact with multi-tool environments through Self-Critic RL design<br>
 </p></details>
 
 
