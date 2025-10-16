@@ -103,6 +103,12 @@
 | Llama3.1-8B-ARPO | [🤗 HuggingFace](https://huggingface.co/dongguanting/Llama3.1-8B-ARPO) |
 
 
+| **Model(AEPO)**         | **Download**                                                 |
+| ----------------- | ------------------------------------------------------------ |
+| Qwen3-8B-AEPO-DeepSearch | [🤗 HuggingFace](https://huggingface.co/dongguanting/Qwen3-8B-AEPO-DeepSearch) |
+| Qwen3-14B-AEPO-DeepSearch | [🤗 HuggingFace](https://huggingface.co/dongguanting/Qwen3-14B-AEPO-DeepSearch) |
+| Qwen2.5-7B-AEPO | [🤗 HuggingFace](https://huggingface.co/dongguanting/Qwen2.5-7B-AEPO) |
+
 
 
 ## Table of Contents
