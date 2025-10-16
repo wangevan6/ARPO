@@ -26,8 +26,9 @@
 
 <p align="center">
 <p align="center">
-🤗 <a href="https://huggingface.co/Alibaba-NLP/Tongyi-DeepResearch-30B-A3B" target="_blank">HuggingFace(ARPO)</a> ｜
-<img src="./assets/tongyi.png" width="14px" style="display:inline;"> <a href="https://modelscope.cn/models/iic/Tongyi-DeepResearch-30B-A3B" target="_blank">ModelScope</a> |  💬 <a href="./assets/wechat_new.jpg">WeChat(微信)</a>
+🤗 <a href="https://huggingface.co/collections/dongguanting/arpo-688229ff8a6143fe5b4ad8ae" target="_blank">HuggingFace(ARPO)</a> ｜
+🤗 <a href="https://huggingface.co/collections/dongguanting/aepo-68ef6832c99697ee03d5e1c7" target="_blank">HuggingFace(AEPO)</a> ｜
+💬 <a href="./assets/wechat_new.jpg">WeChat(微信)</a>
 <p align="center">
 
 > [!NOTE]
