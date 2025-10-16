@@ -1,4 +1,4 @@
-<img width="4948" height="2450" alt="image" src="https://github.com/user-attachments/assets/771fb625-5a83-4a70-8f21-2bbb86dcc316" /><div align="center">
+<div align="center">
   <img src="https://github.com/dongguanting/ARPO/blob/main/logo1.png" width="150px">
 </div>
 
