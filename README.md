@@ -29,8 +29,6 @@
 🤗 <a href="https://huggingface.co/Alibaba-NLP/Tongyi-DeepResearch-30B-A3B" target="_blank">HuggingFace</a> ｜
 <img src="./assets/tongyi.png" width="14px" style="display:inline;"> <a href="https://modelscope.cn/models/iic/Tongyi-DeepResearch-30B-A3B" target="_blank">ModelScope</a> |  💬 <a href="./assets/wechat_new.jpg">WeChat(微信)</a>
 <p align="center">
-<a href="https://trendshift.io/repositories/14895" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14895" alt="Alibaba-NLP%2FDeepResearch | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 
 > [!NOTE]
 > This project includes the codebase and open-sourced datasets and cehckpoints for two RL algorithms: **Agentic Reinforced Policy Optimization (ARPO)** and **Agentic Entropy-Balanced Policy Optimization (AEPO)**. We will continue to iterate and expand our Agentic RL series.
