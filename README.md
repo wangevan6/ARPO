@@ -9,7 +9,7 @@
 <h5 align="center"> If you like our project, please give us a star ⭐ on GitHub for the latest update.</h5>
 
 <div align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=20&duration=3000&pause=1000&color=00D9FF&center=true&vCenter=true&width=800&lines=Welcome+to+ARPO+&+AEPO;Foundation+Agentic+RL+Algorithm+Optimization;Powered+by+Advanced+AI+Technology" alt="Typing Animation" />
+  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=20&duration=3000&pause=1000&color=00D9FF&center=true&vCenter=true&width=800&lines=Welcome+to+ARPO&AEPO;Foundation+Agentic+RL+Algorithm+Optimization;Powered+by+Advanced+AI+Technology" alt="Typing Animation" />
 </div>
 
 
