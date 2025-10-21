@@ -5,8 +5,12 @@
 <h1 align="center" style="margin-top: -50px;">✨ Agentic Reinforced Policy Optimization</h1>
 
 
+
 <h5 align="center"> If you like our project, please give us a star ⭐ on GitHub for the latest update.</h5>
 
+<div align="center">
+  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=24&duration=3000&pause=1000&color=00D9FF&center=true&vCenter=true&width=600&lines=Welcome+to+ARPO+&+AEPO;Foundation+Agentic+RL+Algorithm+Optimization;Powered+by+Advanced+AI+Technology" alt="Typing Animation" />
+</div>
 
 
 <!--
