@@ -3,6 +3,7 @@ import sys
 
 sys.path.append(os.getcwd())
 
+import re
 import json
 import langid
 import string
@@ -12,7 +13,7 @@ import pdfplumber
 import aiolimiter
 
 from io import BytesIO
-from typing import Tuple
+from typing import Tuple, Optional
 from bs4 import BeautifulSoup
 from vllm import SamplingParams
 from urllib.parse import urlencode
@@ -151,7 +152,7 @@ class BingSearchToolSDS(BingSearchTool):
                 async with self._url_fetch_limiter:
                     result = await loop.run_in_executor(
                         self._executor, 
-                        lambda: self.extract_text_from_url(url),
+                        lambda: self.extract_text_from_url(url, use_jina=False, jina_api_key=None),
                     )
                     results[idx] = result
             except Exception as e:
@@ -200,21 +201,55 @@ class BingSearchToolSDS(BingSearchTool):
             if result != "[Cannot fetch this url]":
                 await self.url_cache_manager.add_to_cache(url, result)
 
-    def extract_text_from_url(self, url):
+    def extract_text_from_url(self, url, use_jina=False, jina_api_key=None, snippet: Optional[str] = None):
+        """Extract text from webpage or PDF
+        
+        Args:
+            url (str): URL of webpage or PDF
+            use_jina (bool): Whether to use Jina API for extraction
+            jina_api_key (str): Jina API key (required if use_jina=True)
+            snippet (Optional[str]): Snippet for context extraction (optional, default None)
+            
+        Returns:
+            str: Extracted text
+        """
         try:
-            response = self.session.get(url, timeout=20)
-            response.raise_for_status()
-            content_type = response.headers.get("Content-Type", "")
-            if "pdf" in content_type:
-                print("Extracting PDF...")
-                return self.extract_pdf_text(url)
-            try:
-                soup = BeautifulSoup(response.text, "lxml")
-            except Exception:
-                print("lxml parser failed, using html parser")
-                soup = BeautifulSoup(response.text, "html.parser")
-            text = soup.get_text(separator=" ", strip=True)
-            return text[:20000]
+            # Use Jina API if enabled
+            if use_jina:
+                jina_headers = {
+                    'Authorization': f'Bearer {jina_api_key}',
+                    'X-Return-Format': 'markdown',
+                    # 'X-With-Links-Summary': 'true'
+                }
+                response = requests.get(f'https://r.jina.ai/{url}', headers=jina_headers).text
+                # Remove URLs
+                pattern = r"\(https?:.*?\)|\[https?:.*?\]"
+                text = re.sub(pattern, "", response).replace('---','-').replace('===','=').replace('   ',' ').replace('   ',' ')
+                print("use jina to extract text successfully")
+            else:
+                response = self.session.get(url, timeout=20)
+                response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if "pdf" in content_type:
+                    print("Extracting PDF...")
+                    return self.extract_pdf_text(url)
+                try:
+                    soup = BeautifulSoup(response.text, "lxml")
+                except Exception:
+                    print("lxml parser failed, using html parser")
+                    soup = BeautifulSoup(response.text, "html.parser")
+                text = soup.get_text(separator=" ", strip=True)
+            
+            if snippet:
+                success, context = extract_snippet_with_context(text, snippet)
+                if success:
+                    print("Successfully extract page content based on snippet!")
+                    return context
+                else:
+                    print("Failed to extract page content based on snippet!")
+                    return text
+            else:
+                return text[:20000]
         except requests.exceptions.HTTPError as http_err:
             return f"HTTP error occurred: {http_err}"
         except requests.exceptions.ConnectionError:
