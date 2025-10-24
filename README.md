@@ -820,6 +820,18 @@ bash evaluation/infer_local_sds.sh
 ```
 
 > 🔸 For Chinese datasets like `xbench`, use `infer_local_sds_cn.sh` instead.
+> 
+> 💡 **Optional: Use Jina API for better Chinese webpage extraction**
+> 
+> To improve Chinese webpage parsing, you can enable Jina Reader API by modifying `evaluation/src/tools/search_tool_sds.py` (line ~155):
+> ```python
+> # Change from:
+> lambda: self.extract_text_from_url(url, use_jina=False, jina_api_key=None)
+> 
+> # To:
+> lambda: self.extract_text_from_url(url, use_jina=True, jina_api_key="your_jina_api_key")
+> ```
+> Get your Jina API key at https://jina.ai/reader
 
 
 ### 4. Calculate Metrics
