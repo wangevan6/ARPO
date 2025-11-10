@@ -10,28 +10,30 @@
 6. [Key Classes and Functions](#key-classes-and-functions)
 7. [Configuration Management](#configuration-management)
 
----
+***
 
 ## Project Overview
 
 ARPO (Agentic Reinforced Policy Optimization) is a reinforcement learning framework for training multi-turn LLM-based agents with tool integration. The project includes two main RL algorithms:
 
-- **ARPO**: Encourages adaptive branch sampling during high-entropy tool-call rounds
-- **AEPO**: Balances entropy in both rollout and policy update phases
+* **ARPO**: Encourages adaptive branch sampling during high-entropy tool-call rounds
+
+* **AEPO**: Balances entropy in both rollout and policy update phases
 
 The codebase is organized into three main stages:
+
 1. **SFT (Supervised Fine-Tuning)**: Cold-start training using LLaMA-Factory
 2. **RL Training**: ARPO/AEPO training using VERL framework
 3. **Evaluation**: Multi-benchmark testing with tool-augmented inference
 
----
+***
 
 ## Directory Structure
 
 ### High-Level Organization
 
 ```mermaid
-graph TB
+graph LR
     ROOT[ARPO Project Root]
 
     ROOT --> SFT[LLaMA-Factory<br/>SFT Training]
@@ -153,9 +155,12 @@ ARPO/ (or AEPO/)
 **Key Role**: Trains policy to use tools effectively via RL
 
 **AEPO Differences**:
-- `enable_dynamic_rollouts`: Dynamic entropy-balanced rollout
-- `enable_entropy_balanced_clipping`: Stop-gradient on high entropy
-- `enable_entropy_balanced_advantage`: Entropy-aware advantage
+
+* `enable_dynamic_rollouts`: Dynamic entropy-balanced rollout
+
+* `enable_entropy_balanced_clipping`: Stop-gradient on high entropy
+
+* `enable_entropy_balanced_advantage`: Entropy-aware advantage
 
 #### 3. Evaluation (Testing Framework)
 
@@ -183,7 +188,7 @@ evaluation/
 
 **Key Role**: Validates trained models on diverse benchmarks
 
----
+***
 
 ## System Architecture
 
@@ -316,21 +321,26 @@ sequenceDiagram
     R->>R: Complete trajectory
 ```
 
----
+***
 
 ## Core Components
 
 ### 1. SFT Training Components
 
 #### Main Orchestrator
+
 **File**: `LLaMA-Factory/src/llamafactory/train/tuner.py`
 
 **Function**: `run_exp()`
-- Entry point for all training workflows
-- Initializes distributed training
-- Routes to specific stage (SFT/PPO/DPO)
+
+* Entry point for all training workflows
+
+* Initializes distributed training
+
+* Routes to specific stage (SFT/PPO/DPO)
 
 **Key Code**:
+
 ```python
 def run_exp():
     # Parse arguments
@@ -346,14 +356,19 @@ def run_exp():
 ```
 
 #### Dataset Loader
+
 **File**: `LLaMA-Factory/src/llamafactory/data/loader.py`
 
 **Function**: `get_dataset()`
-- Loads datasets from JSONL/JSON
-- Applies chat template
-- Tokenizes with masking
+
+* Loads datasets from JSONL/JSON
+
+* Applies chat template
+
+* Tokenizes with masking
 
 **Key Code**:
+
 ```python
 def get_dataset(model_args, data_args):
     # Load dataset info
@@ -370,14 +385,19 @@ def get_dataset(model_args, data_args):
 ```
 
 #### Custom Trainer
+
 **File**: `LLaMA-Factory/src/llamafactory/train/sft/trainer.py`
 
 **Class**: `CustomSeq2SeqTrainer`
-- Extends HuggingFace Seq2SeqTrainer
-- Supports DeepSpeed ZeRO-3
-- Custom optimizer/scheduler creation
+
+* Extends HuggingFace Seq2SeqTrainer
+
+* Supports DeepSpeed ZeRO-3
+
+* Custom optimizer/scheduler creation
 
 **Key Methods**:
+
 ```python
 class CustomSeq2SeqTrainer(Seq2SeqTrainer):
     def create_optimizer(self):
@@ -396,14 +416,19 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 ### 2. RL Training Components
 
 #### Main Trainer
+
 **File**: `ARPO/verl_arpo_entropy/verl/trainer/ppo/ray_trainer.py`
 
 **Class**: `RayPPOTrainer`
-- Orchestrates distributed RL training
-- Manages worker groups via Ray
-- Implements PPO/GRPO training loop
+
+* Orchestrates distributed RL training
+
+* Manages worker groups via Ray
+
+* Implements PPO/GRPO training loop
 
 **Key Methods**:
+
 ```python
 class RayPPOTrainer:
     def init_workers(self):
@@ -431,14 +456,19 @@ class RayPPOTrainer:
 ```
 
 #### Tool-Augmented Rollout
+
 **File**: `ARPO/verl_arpo_entropy/verl/workers/rollout/vllm_rollout/vllm_rollout_with_tools.py`
 
 **Class**: `vLLMRolloutWithTools`
-- Multi-turn generation with tool calls
-- ARPO branching based on entropy
-- Concurrent tool execution
+
+* Multi-turn generation with tool calls
+
+* ARPO branching based on entropy
+
+* Concurrent tool execution
 
 **Key Methods**:
+
 ```python
 class vLLMRolloutWithTools(vLLMRollout):
     def generate_sequences(self, prompts):
@@ -475,11 +505,13 @@ class vLLMRolloutWithTools(vLLMRollout):
 ```
 
 #### Core Algorithms
+
 **File**: `ARPO/verl_arpo_entropy/verl/trainer/ppo/core_algos.py`
 
 **Key Functions**:
 
 1. **GAE Advantage Estimation**:
+
 ```python
 def compute_gae_advantage_return(values, rewards, gamma=0.99, lam=0.95):
     """Generalized Advantage Estimation"""
@@ -495,7 +527,8 @@ def compute_gae_advantage_return(values, rewards, gamma=0.99, lam=0.95):
     return advantages, returns
 ```
 
-2. **GRPO Advantage**:
+1. **GRPO Advantage**:
+
 ```python
 def compute_grpo_outcome_advantage(rewards, responses):
     """Group Relative Policy Optimization"""
@@ -511,7 +544,8 @@ def compute_grpo_outcome_advantage(rewards, responses):
     return grouped_rewards
 ```
 
-3. **PPO Loss**:
+1. **PPO Loss**:
+
 ```python
 def compute_ppo_loss(log_probs, old_log_probs, advantages, clip_ratio=0.2):
     """PPO clipped objective"""
@@ -529,6 +563,7 @@ def compute_ppo_loss(log_probs, old_log_probs, advantages, clip_ratio=0.2):
 #### Tool Implementations
 
 **Python Tool** - `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/python_tool.py`:
+
 ```python
 class PythonTool(BaseTool):
     @property
@@ -559,6 +594,7 @@ class PythonTool(BaseTool):
 ```
 
 **Search Tool** - `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/search_tool.py`:
+
 ```python
 class BingSearchTool(BaseTool):
     @property
@@ -601,6 +637,7 @@ class BingSearchTool(BaseTool):
 ### 3. Reward Functions
 
 **Deep Research Reward** - `ARPO/verl_arpo_entropy/verl/utils/reward_score/deep_research.py`:
+
 ```python
 def compute_score(data: List[Dict]) -> List[float]:
     """
@@ -636,6 +673,7 @@ def compute_score(data: List[Dict]) -> List[float]:
 ```
 
 **Math Reward** - `ARPO/verl_arpo_entropy/verl/utils/reward_score/math.py`:
+
 ```python
 def compute_score(data: List[Dict]) -> List[float]:
     """
@@ -658,7 +696,7 @@ def compute_score(data: List[Dict]) -> List[float]:
     return scores
 ```
 
----
+***
 
 ## Data Flow
 
@@ -682,6 +720,7 @@ graph LR
 **Data Format Evolution**:
 
 1. **Raw JSONL**:
+
 ```json
 {
   "conversations": [
@@ -693,7 +732,8 @@ graph LR
 }
 ```
 
-2. **After Alignment**:
+1. **After Alignment**:
+
 ```python
 {
   "_prompt": [
@@ -708,7 +748,8 @@ graph LR
 }
 ```
 
-3. **After Tokenization**:
+1. **After Tokenization**:
+
 ```python
 {
   "input_ids": [151644, 872, 198, ...],  # Token IDs
@@ -717,7 +758,8 @@ graph LR
 }
 ```
 
-4. **After Collation (Batch)**:
+1. **After Collation (Batch)**:
+
 ```python
 {
   "input_ids": torch.Tensor([[...], [...]]),      # [batch, max_len]
@@ -749,6 +791,7 @@ graph TB
 **RL Data Format**:
 
 1. **Input Parquet**:
+
 ```python
 {
   "prompt": "What is the capital of France?",
@@ -758,7 +801,8 @@ graph TB
 }
 ```
 
-2. **Rollout Output (DataProto)**:
+1. **Rollout Output (DataProto)**:
+
 ```python
 {
   "prompts": ["What is..."],
@@ -771,7 +815,8 @@ graph TB
 }
 ```
 
-3. **After Advantage Estimation**:
+1. **After Advantage Estimation**:
+
 ```python
 {
   ...all above,
@@ -780,37 +825,37 @@ graph TB
 }
 ```
 
----
+***
 
 ## Key Classes and Functions
 
 ### SFT Stage
 
-| Component | File Path | Key Functions/Methods |
-|-----------|-----------|----------------------|
-| **Main Entry** | `LLaMA-Factory/src/llamafactory/train/tuner.py` | `run_exp()` |
-| **SFT Workflow** | `LLaMA-Factory/src/llamafactory/train/sft/workflow.py` | `run_sft()` |
-| **Trainer** | `LLaMA-Factory/src/llamafactory/train/sft/trainer.py` | `CustomSeq2SeqTrainer` |
-| **Data Loader** | `LLaMA-Factory/src/llamafactory/data/loader.py` | `get_dataset()` |
-| **Data Processor** | `LLaMA-Factory/src/llamafactory/data/processor/supervised.py` | `SupervisedDatasetProcessor` |
-| **Model Loader** | `LLaMA-Factory/src/llamafactory/model/loader.py` | `load_model()`, `load_tokenizer()` |
-| **Argument Parser** | `LLaMA-Factory/src/llamafactory/hparams/parser.py` | `get_train_args()` |
+| Component           | File Path                                                     | Key Functions/Methods              |
+| ------------------- | ------------------------------------------------------------- | ---------------------------------- |
+| **Main Entry**      | `LLaMA-Factory/src/llamafactory/train/tuner.py`               | `run_exp()`                        |
+| **SFT Workflow**    | `LLaMA-Factory/src/llamafactory/train/sft/workflow.py`        | `run_sft()`                        |
+| **Trainer**         | `LLaMA-Factory/src/llamafactory/train/sft/trainer.py`         | `CustomSeq2SeqTrainer`             |
+| **Data Loader**     | `LLaMA-Factory/src/llamafactory/data/loader.py`               | `get_dataset()`                    |
+| **Data Processor**  | `LLaMA-Factory/src/llamafactory/data/processor/supervised.py` | `SupervisedDatasetProcessor`       |
+| **Model Loader**    | `LLaMA-Factory/src/llamafactory/model/loader.py`              | `load_model()`, `load_tokenizer()` |
+| **Argument Parser** | `LLaMA-Factory/src/llamafactory/hparams/parser.py`            | `get_train_args()`                 |
 
 ### RL Stage
 
-| Component | File Path | Key Functions/Methods |
-|-----------|-----------|----------------------|
-| **Main Entry** | `ARPO/verl_arpo_entropy/verl/trainer/main_ppo.py` | `main()` |
-| **PPO Trainer** | `ARPO/verl_arpo_entropy/verl/trainer/ppo/ray_trainer.py` | `RayPPOTrainer.fit()` |
-| **Algorithms** | `ARPO/verl_arpo_entropy/verl/trainer/ppo/core_algos.py` | `compute_gae_advantage_return()`, `compute_grpo_advantage()`, `compute_ppo_loss()` |
-| **Workers** | `ARPO/verl_arpo_entropy/verl/workers/fsdp_workers.py` | `ActorRolloutRefWorker` |
-| **Rollout** | `ARPO/verl_arpo_entropy/verl/workers/rollout/vllm_rollout/vllm_rollout_with_tools.py` | `vLLMRolloutWithTools.generate_sequences()` |
-| **Python Tool** | `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/python_tool.py` | `PythonTool.execute()` |
-| **Search Tool** | `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/search_tool.py` | `BingSearchTool.execute()` |
-| **Dataset** | `ARPO/verl_arpo_entropy/verl/utils/dataset/rl_dataset.py` | `RLHFDataset` |
-| **Rewards** | `ARPO/verl_arpo_entropy/verl/utils/reward_score/` | `compute_score()` functions |
+| Component       | File Path                                                                             | Key Functions/Methods                                                              |
+| --------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Main Entry**  | `ARPO/verl_arpo_entropy/verl/trainer/main_ppo.py`                                     | `main()`                                                                           |
+| **PPO Trainer** | `ARPO/verl_arpo_entropy/verl/trainer/ppo/ray_trainer.py`                              | `RayPPOTrainer.fit()`                                                              |
+| **Algorithms**  | `ARPO/verl_arpo_entropy/verl/trainer/ppo/core_algos.py`                               | `compute_gae_advantage_return()`, `compute_grpo_advantage()`, `compute_ppo_loss()` |
+| **Workers**     | `ARPO/verl_arpo_entropy/verl/workers/fsdp_workers.py`                                 | `ActorRolloutRefWorker`                                                            |
+| **Rollout**     | `ARPO/verl_arpo_entropy/verl/workers/rollout/vllm_rollout/vllm_rollout_with_tools.py` | `vLLMRolloutWithTools.generate_sequences()`                                        |
+| **Python Tool** | `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/python_tool.py`                    | `PythonTool.execute()`                                                             |
+| **Search Tool** | `ARPO/verl_arpo_entropy/verl/workers/rollout/tools/search_tool.py`                    | `BingSearchTool.execute()`                                                         |
+| **Dataset**     | `ARPO/verl_arpo_entropy/verl/utils/dataset/rl_dataset.py`                             | `RLHFDataset`                                                                      |
+| **Rewards**     | `ARPO/verl_arpo_entropy/verl/utils/reward_score/`                                     | `compute_score()` functions                                                        |
 
----
+***
 
 ## Configuration Management
 
@@ -896,6 +941,7 @@ trainer:
 ```
 
 **CLI Overrides**:
+
 ```bash
 python -m verl.trainer.main_ppo \
     --config-path=$CONFIG_PATH \
@@ -942,7 +988,7 @@ save_steps: 2000
 logging_steps: 10
 ```
 
----
+***
 
 ## Summary
 
@@ -955,4 +1001,3 @@ The ARPO project is a comprehensive framework for training agentic LLMs with:
 5. **Extensive Evaluation**: 13 benchmarks across math, knowledge, and search domains
 
 **Key Innovation**: Entropy-based branching (ARPO) and entropy-balanced optimization (AEPO) for efficient tool-augmented RL training.
-

@@ -3,6 +3,7 @@
 #================== Basic Configuration ==================#
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  # List of visible GPUs
 export PYTHONPATH=$(pwd):$PYTHONPATH
+export USE_LIBUV=0
 
 # Disable Weights & Biases
 export WANDB_DISABLED=true

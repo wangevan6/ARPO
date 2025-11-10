@@ -1,0 +1,42 @@
+### model
+model_name_or_path: ../models/Qwen2.5-0.5B-Instruct 
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full
+# deepspeed: ../examples/deepspeed/ds_z2_config.json  # Not needed for toy training (DeepSpeed not installed)
+
+### dataset
+dataset_dir: dataset_info
+dataset: arpo_sft_toy  # Using toy dataset for local testing
+template: qwen
+cutoff_len: 4096  # Reduced from 15000 for faster training
+max_samples: 500  # Limit to toy dataset size
+overwrite_cache: true
+preprocessing_num_workers: 4  # Reduced for single GPU
+
+### output
+output_dir: checkpoints/qwen0.5b_toy  # Separate output dir for toy model
+logging_steps: 5  # More frequent logging for monitoring
+save_steps: 50  # Save more frequently (smaller dataset)
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 2  # Can use larger batch for 0.5B model
+gradient_accumulation_steps: 1  # Single GPU, no need for large accumulation
+learning_rate: 7.0e-6  # Keep same as production
+num_train_epochs: 1.0  # Single epoch for quick validation
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+ddp_timeout: 180000000
+
+### eval (optional for toy testing)
+# eval_dataset: alpaca_en_demo
+# val_size: 0.1
+# per_device_eval_batch_size: 1
+# eval_strategy: steps
+# eval_steps: 25

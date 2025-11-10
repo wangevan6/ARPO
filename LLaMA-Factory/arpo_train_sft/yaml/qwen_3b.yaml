@@ -1,0 +1,41 @@
+### model
+model_name_or_path: ./models/Qwen2.5-0.5B-Instruct  # Set to path of Qwen/Qwen2.5-3B-Instruct
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full
+deepspeed: ../examples/deepspeed/ds_z3_offload_config.json  # ZeRO-3 with offloading for memory efficiency
+
+### dataset
+dataset_dir: dataset_info
+dataset: arpo_sft_54k  # Full ARPO-SFT-54K dataset
+template: qwen
+cutoff_len: 15000  # Full sequence length
+max_samples: 1000000  # Use all samples
+overwrite_cache: true
+preprocessing_num_workers: 16  # Multi-core preprocessing
+
+### output
+output_dir: <your_output_dir>  # Set to your checkpoint directory (e.g., /data/checkpoints/qwen2.5-3b-sft)
+logging_steps: 10  # Log every 10 steps
+save_steps: 2000  # Save checkpoint every 2000 steps
+plot_loss: true
+overwrite_output_dir: true
+
+### train
+per_device_train_batch_size: 1  # Conservative for 3B model on 24-48GB GPUs
+gradient_accumulation_steps: 2  # Effective batch size = 1 * 2 * 8 GPUs = 16
+learning_rate: 7.0e-6  # Standard learning rate
+num_train_epochs: 3.0  # Full 3 epochs as in ARPO paper
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true  # BFloat16 for numerical stability
+ddp_timeout: 180000000
+
+### eval (optional)
+# val_size: 0.01  # Use 1% of data for validation
+# per_device_eval_batch_size: 1
+# eval_strategy: steps
+# eval_steps: 500

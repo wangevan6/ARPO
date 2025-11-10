@@ -1,3 +1,23 @@
+# Dataset files (large JSONL files)
 LLaMA-Factory/arpo_train_sft/dataset/*.jsonl
-LLaMA-Factory/arpo_train_sft/dataset/*.jsonl
+LLaMA-Factory/data/*.jsonl
+LLaMA-Factory/data/*.json
+
+# Model files (large model weights)
+LLaMA-Factory/models/
+
+# Training checkpoints (large checkpoint files)
+LLaMA-Factory/arpo_train_sft/checkpoints/
+
+# Backup files
 LLaMA-Factory/LLaMA-Factory-backup
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Logs
+*.log

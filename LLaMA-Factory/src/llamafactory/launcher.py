@@ -12,6 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
+
+# Fix for Windows PyTorch distributed training libuv error
+# Must be set before any torch imports and at the very beginning
+os.environ["USE_LIBUV"] = "0"
+
+# # Also set it as a command line argument to ensure it persists
+# if "USE_LIBUV=0" not in str(sys.argv):
+#     sys.argv.insert(1, "USE_LIBUV=0")
+
 from llamafactory.train.tuner import run_exp  # use absolute import
 
 
