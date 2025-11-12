@@ -14,7 +14,7 @@
 10. [Checkpoint Conversion](#checkpoint-conversion)
 11. [Troubleshooting](#troubleshooting)
 
----
+***
 
 ## Overview
 
@@ -23,14 +23,20 @@ This guide provides complete instructions for reproducing the Reinforcement Lear
 ### Key Concepts
 
 **ARPO (Agentic Reinforced Policy Optimization)**:
-- Adaptive branch sampling at high-entropy tool-call rounds
-- Efficient exploration of tool-use behaviors
-- Group Relative Policy Optimization (GRPO) for advantage estimation
+
+* Adaptive branch sampling at high-entropy tool-call rounds
+
+* Efficient exploration of tool-use behaviors
+
+* Group Relative Policy Optimization (GRPO) for advantage estimation
 
 **AEPO (Agentic Entropy-Balanced Policy Optimization)**:
-- Dynamic entropy-balanced rollout mechanism
-- Entropy clipping-balanced gradient computation
-- Entropy-aware advantage estimation
+
+* Dynamic entropy-balanced rollout mechanism
+
+* Entropy clipping-balanced gradient computation
+
+* Entropy-aware advantage estimation
 
 ### Training Workflow
 
@@ -52,39 +58,51 @@ graph TB
     style J fill:#fff9c4
 ```
 
----
+***
 
 ## Prerequisites
 
 ### Hardware Requirements
 
 **Minimum**:
-- 1 node with 8x NVIDIA A100 (40GB) or equivalent
-- 512GB System RAM
-- 1TB NVMe SSD for cache and checkpoints
+
+* 1 node with 8x NVIDIA A100 (40GB) or equivalent
+
+* 512GB System RAM
+
+* 1TB NVMe SSD for cache and checkpoints
 
 **Recommended**:
-- 1-2 nodes with 8x NVIDIA A100 (80GB)
-- 1TB System RAM
-- 2TB NVMe SSD
+
+* 1-2 nodes with 8x NVIDIA A100 (80GB)
+
+* 1TB System RAM
+
+* 2TB NVMe SSD
 
 **Estimated Training Time**:
-- 7B model: ~4-6 hours (2 epochs, 128 batch size)
-- 14B model: ~8-12 hours (2 epochs, 64 batch size)
+
+* 7B model: \~4-6 hours (2 epochs, 128 batch size)
+
+* 14B model: \~8-12 hours (2 epochs, 64 batch size)
 
 ### Software Requirements
 
-- **OS**: Linux (Ubuntu 20.04/22.04)
-- **CUDA**: 12.1+ (for vLLM compatibility)
-- **Python**: 3.10
-- **Ray**: For distributed training
+* **OS**: Linux (Ubuntu 20.04/22.04)
+
+* **CUDA**: 12.1+ (for vLLM compatibility)
+
+* **Python**: 3.10
+
+* **Ray**: For distributed training
 
 ### Required Accounts
 
-- **Bright Data Account**: For Bing Search API (or alternative search API)
-- **WandB Account** (Optional): For experiment tracking
+* **Bright Data Account**: For Bing Search API (or alternative search API)
 
----
+* **WandB Account** (Optional): For experiment tracking
+
+***
 
 ## Environment Setup
 
@@ -161,7 +179,7 @@ python -c "import ray; ray.init(address='auto'); print(ray.cluster_resources())"
 ray stop
 ```
 
----
+***
 
 ## Data Preparation
 
@@ -170,12 +188,16 @@ ray stop
 ARPO provides two types of RL datasets:
 
 **1. Reasoning and Knowledge Dataset** (10K samples):
-- Mathematical reasoning: AIME, MATH500, GSM8K
-- Knowledge QA: HotpotQA, 2Wiki, Musique, Bamboogle
+
+* Mathematical reasoning: AIME, MATH500, GSM8K
+
+* Knowledge QA: HotpotQA, 2Wiki, Musique, Bamboogle
 
 **2. Deep Search Dataset** (1K samples):
-- Complex web search tasks: GAIA, HLE
-- Web navigation: SimpleDeepSearch, WebDancer
+
+* Complex web search tasks: GAIA, HLE
+
+* Web navigation: SimpleDeepSearch, WebDancer
 
 ```bash
 # Create dataset directory
@@ -216,6 +238,7 @@ print(f"Tools: {sample.get('tools', [])}")
 ```
 
 **Expected Schema**:
+
 ```
 Columns: ['prompt', 'answer', 'data_source', 'tools']
 
@@ -241,19 +264,22 @@ ls -lh /path/to/sft_checkpoint/
 # - tokenizer_config.json
 ```
 
----
+***
 
 ## API Configuration
 
 ### Step 1: Set Up Search API (Bright Data)
 
 **Register for Bright Data**:
-1. Visit https://brightdata.com/
+
+1. Visit <https://brightdata.com/>
 2. Sign up for an account
 3. Navigate to "Zones" → "Web Scraper API"
 4. Create a new zone and note:
-   - API Key
-   - Zone name
+
+   * API Key
+
+   * Zone name
 
 **Alternative**: Use another Bing Search API provider or implement your own search tool.
 
@@ -271,9 +297,12 @@ chmod 644 search_cache/search_cache.json
 ```
 
 **Why Cache?**: Search results are cached to:
-- Reduce API costs (avoid repeated queries)
-- Speed up training (instant cache hits)
-- Enable reproducibility (same search results)
+
+* Reduce API costs (avoid repeated queries)
+
+* Speed up training (instant cache hits)
+
+* Enable reproducibility (same search results)
 
 ### Step 3: Update Tool Configuration
 
@@ -315,6 +344,7 @@ tools:
 ```
 
 **Find Conda Path**:
+
 ```bash
 which conda
 # Example: /home/user/anaconda3/bin/conda
@@ -324,6 +354,7 @@ which conda
 ### Step 4: Test Tool Configuration
 
 **Test Python Tool**:
+
 ```python
 from verl.workers.rollout.tools.python_tool import PythonTool
 
@@ -338,6 +369,7 @@ print(f"Result: {result}")  # Should print: 4
 ```
 
 **Test Search Tool**:
+
 ```python
 from verl.workers.rollout.tools.search_tool import BingSearchTool
 
@@ -353,7 +385,7 @@ print(f"Search results: {result[:200]}...")
 # Should return search results about Paris
 ```
 
----
+***
 
 ## Training Configuration
 
@@ -390,9 +422,12 @@ data:
 ```
 
 **Batch Size Guidelines**:
-- 7B model: 128 (8x A100 40GB)
-- 14B model: 64 (8x A100 80GB)
-- Adjust based on available GPU memory
+
+* 7B model: 128 (8x A100 40GB)
+
+* 14B model: 64 (8x A100 80GB)
+
+* Adjust based on available GPU memory
 
 ### Step 2: Configure Model Settings
 
@@ -490,10 +525,14 @@ actor_rollout_ref:
 ```
 
 **ARPO Branching Explained**:
-- **initial_rollouts**: Start with 8 samples per prompt
-- **High entropy detected**: Model uncertain at tool-call step
-- **Branching**: Create `beam_size` (2) additional branches
-- **Total**: Up to 16 samples (8 initial + 8 from branching)
+
+* **initial\_rollouts**: Start with 8 samples per prompt
+
+* **High entropy detected**: Model uncertain at tool-call step
+
+* **Branching**: Create `beam_size` (2) additional branches
+
+* **Total**: Up to 16 samples (8 initial + 8 from branching)
 
 ### Step 5: Configure Reward Function
 
@@ -516,9 +555,12 @@ custom_reward_function:
 ```
 
 **Reward Function Selection**:
-- **deep_research.py**: GAIA, HLE, search tasks
-- **math.py**: AIME, MATH500, GSM8K
-- **gsm8k.py**: GSM8K-specific (stricter grading)
+
+* **deep\_research.py**: GAIA, HLE, search tasks
+
+* **math.py**: AIME, MATH500, GSM8K
+
+* **gsm8k.py**: GSM8K-specific (stricter grading)
 
 ### Step 6: Configure Trainer Settings
 
@@ -547,7 +589,7 @@ trainer:
   critic_warmup: 0                # Critic warmup steps (0 for GRPO)
 ```
 
----
+***
 
 ## ARPO Training
 
@@ -702,6 +744,7 @@ bash scripts/ARPO_7B_Reasoning.sh
 ### Step 4: Monitor Training
 
 **Expected Initialization**:
+
 ```
 [INFO] Initializing Ray cluster...
 [INFO] Loading model from /path/to/sft_checkpoint
@@ -711,6 +754,7 @@ bash scripts/ARPO_7B_Reasoning.sh
 ```
 
 **Training Logs**:
+
 ```
 Epoch 0 | Step 1 | Reward: 0.45 | KL: 0.00 | Loss: 0.234
 Epoch 0 | Step 2 | Reward: 0.52 | KL: 0.00 | Loss: 0.198
@@ -718,10 +762,12 @@ Epoch 0 | Step 2 | Reward: 0.52 | KL: 0.00 | Loss: 0.198
 ```
 
 **WandB Dashboard** (if enabled):
-- Navigate to https://wandb.ai/
-- View metrics: reward, KL, loss, advantage, rollout stats
 
----
+* Navigate to <https://wandb.ai/>
+
+* View metrics: reward, KL, loss, advantage, rollout stats
+
+***
 
 ## AEPO Training
 
@@ -775,6 +821,7 @@ python3 -m verl.trainer.main_ppo \
 ### Step 3: AEPO Module Explanations
 
 **1. Entropy Clipping-Balanced Mechanism**:
+
 ```python
 # In policy update
 if enable_entropy_balanced_clipping:
@@ -785,22 +832,27 @@ if enable_entropy_balanced_clipping:
         clipped_ratio
     )
 ```
+
 **Effect**: Preserves gradients on high-entropy tokens without over-clipping.
 
 **2. Entropy-aware Advantage Estimation**:
+
 ```python
 if enable_entropy_balanced_advantage:
     entropy_weights = torch.softmax(entropy / temperature, dim=-1)
     advantages = advantages * entropy_weights
 ```
+
 **Effect**: Prioritizes learning on high-uncertainty tokens.
 
 **3. Dynamic Entropy-Balanced Rollout**:
+
 ```python
 if enable_dynamic_rollouts:
     # Adjust rollout budget based on entropy pre-monitoring
     # Apply branch penalty for consecutive high-entropy steps
 ```
+
 **Effect**: Prevents over-branching while maintaining exploration.
 
 ### Step 4: Launch AEPO Training
@@ -810,23 +862,26 @@ chmod +x scripts/AEPO_Qwen3_14B_DeepResearch.sh
 bash scripts/AEPO_Qwen3_14B_DeepResearch.sh
 ```
 
----
+***
 
 ## Monitoring and Debugging
 
 ### Real-Time Monitoring
 
 **1. Training Log**:
+
 ```bash
 tail -f checkpoints/your_experiment/run.log
 ```
 
 **2. GPU Monitoring**:
+
 ```bash
 watch -n 1 nvidia-smi
 ```
 
 **3. Ray Dashboard**:
+
 ```bash
 # Ray dashboard runs on http://127.0.0.1:8265
 # Navigate in browser to see:
@@ -844,20 +899,25 @@ watch -n 1 nvidia-smi
 **Loss**: Policy loss, should decrease initially then stabilize
 
 **Rollout Stats**:
-- Tool call success rate
-- Average response length
-- Entropy statistics
+
+* Tool call success rate
+
+* Average response length
+
+* Entropy statistics
 
 ### Common Issues and Solutions
 
 **Issue 1: vLLM OOM**
 
 **Symptoms**:
+
 ```
 RuntimeError: CUDA out of memory (vLLM)
 ```
 
 **Solutions**:
+
 ```yaml
 # Reduce vLLM memory usage
 actor_rollout_ref.rollout.gpu_memory_utilization: 0.5  # From 0.7
@@ -870,11 +930,13 @@ actor_rollout_ref.rollout.initial_rollouts: 6  # From 8
 **Issue 2: Tool Execution Timeout**
 
 **Symptoms**:
+
 ```
 WARNING: Tool execution timeout (120s exceeded)
 ```
 
 **Solutions**:
+
 ```yaml
 # Increase timeout
 actor_rollout_ref.rollout.tools.timeout: 180  # From 120
@@ -888,6 +950,7 @@ actor_rollout_ref.rollout.tools.call_limit: 2  # From 3
 **Cause**: Reward function not extracting answers correctly
 
 **Solutions**:
+
 ```bash
 # Check reward function
 python -c "
@@ -905,11 +968,13 @@ tail -f checkpoints/your_experiment/rollout/rollout_0.jsonl
 **Issue 4: Training Diverges (Loss → NaN)**
 
 **Symptoms**:
+
 ```
 Step 50 | Loss: nan | Reward: nan
 ```
 
 **Solutions**:
+
 ```yaml
 # Reduce learning rate
 actor_rollout_ref.actor.optim.lr: 5e-7  # From 1e-6
@@ -921,7 +986,7 @@ actor_rollout_ref.actor.max_grad_norm: 1.0
 actor_rollout_ref.actor.clip_ratio: 0.1  # From 0.2
 ```
 
----
+***
 
 ## Checkpoint Conversion
 
@@ -990,7 +1055,7 @@ response = tokenizer.decode(outputs[0], skip_special_tokens=False)
 print(f"Response: {response}")
 ```
 
----
+***
 
 ## Troubleshooting
 
@@ -999,6 +1064,7 @@ print(f"Response: {response}")
 **Problem**: Ray fails to start
 
 **Solutions**:
+
 ```bash
 # Kill existing Ray processes
 ray stop --force
@@ -1015,6 +1081,7 @@ ray start --head --port=6379
 **Problem**: FSDP initialization hangs
 
 **Solutions**:
+
 ```yaml
 # Disable FSDP optimizations
 actor_rollout_ref.actor.fsdp_config.param_offload: false
@@ -1029,6 +1096,7 @@ actor_rollout_ref.actor.fsdp_config.optimizer_offload: false
 **Problem**: Search API rate limiting
 
 **Solutions**:
+
 ```bash
 # Check cache hit rate
 python -c "
@@ -1043,21 +1111,25 @@ with open('search_cache/search_cache.json') as f:
 # max_workers: 32  # From 64
 ```
 
----
+***
 
 ## Summary Checklist
 
 Before evaluation:
 
-- [ ] RL training completed successfully
-- [ ] Final checkpoint converted to HuggingFace format
-- [ ] Converted model loads without errors
-- [ ] Model generates tool-augmented responses
-- [ ] Checkpoint path noted for evaluation
+* [ ] RL training completed successfully
+
+* [ ] Final checkpoint converted to HuggingFace format
+
+* [ ] Converted model loads without errors
+
+* [ ] Model generates tool-augmented responses
+
+* [ ] Checkpoint path noted for evaluation
 
 **Next Step**: Proceed to evaluation guide to test on 13 benchmarks.
 
----
+***
 
 ## Quick Reference
 
@@ -1080,8 +1152,9 @@ print('Success')"
 ```
 
 **Training Time Estimates**:
-- 7B model, 2 epochs, 128 batch: ~4-6 hours
-- 14B model, 5 epochs, 64 batch: ~12-16 hours
+
+* 7B model, 2 epochs, 128 batch: \~4-6 hours
+
+* 14B model, 5 epochs, 64 batch: \~12-16 hours
 
 **Congratulations!** You've successfully trained an ARPO/AEPO model with tool-augmented RL.
-

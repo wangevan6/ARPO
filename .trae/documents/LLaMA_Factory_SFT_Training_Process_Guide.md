@@ -1,977 +1,2018 @@
-# LLaMA-Factory SFT Training Process - Complete Guide
+# Complete ARPO/AEPO RL Training Guide
 
-**Date**: 2025-11-10
-**Context**: ARPO Toy Training Setup (Qwen2.5-0.5B-Instruct, 500 samples)
-**Environment**: Windows 11, Git Bash, conda environment `sft`
+## From Local Toy Testing to Production Deployment
 
----
+**Target**: Train ARPO and AEPO on Qwen2.5-7B with Reasoning dataset (10K samples)
+
+**Strategy**: Local toy test (16GB GPU) → Cluster production (8x 40GB GPUs)
+
+***
 
 ## Table of Contents
 
-1. [Training Overview](#training-overview)
-2. [Our Training Settings](#our-training-settings)
-3. [Bash Script Configuration](#bash-script-configuration)
-4. [Training Execution Flow](#training-execution-flow)
-5. [Component Interactions](#component-interactions)
-6. [File Structure & Paths](#file-structure--paths)
+1. [Prerequisites](#prerequisites)
+2. [STAGE 1: Local Toy RL Training](#stage-1-local-toy-rl-training)
+3. [STAGE 2: Cluster ARPO Production](#stage-2-cluster-arpo-production)
+4. [STAGE 3: Cluster AEPO Production](#stage-3-cluster-aepo-production)
+5. [STAGE 4: Verification](#stage-4-verification)
+6. [Troubleshooting](#troubleshooting)
 
----
+***
 
-## Training Overview
+## Prerequisites
 
-### What is SFT (Supervised Fine-Tuning)?
+### Hardware
 
-SFT is the process of fine-tuning a pre-trained language model on task-specific data to adapt it for specialized use cases. In ARPO's context:
+* **Local**: 1 GPU with 16GB VRAM (WSL2 on Windows)
 
-- **Input**: Pre-trained model (Qwen2.5-0.5B-Instruct) + Multi-turn conversation dataset
-- **Process**: Update model weights using supervised learning on conversation pairs
-- **Output**: Fine-tuned model checkpoint optimized for tool-augmented conversations
+* **Cluster**: 8x NVIDIA A100 40GB GPUs (Linux)
 
-### LLaMA-Factory Framework
+### Software
 
-LLaMA-Factory is a unified framework for fine-tuning large language models, supporting:
-- Multiple training methods: SFT, PPO, DPO, ORPO, etc.
-- Various model architectures: LLaMA, Qwen, Mistral, etc.
-- Optimization techniques: DeepSpeed, FSDP, LoRA, QLoRA
-- Flexible data formats: ShareGPT, Alpaca, etc.
+* WSL2 with CUDA support (local)
 
----
+* Conda/Miniconda
 
-## Our Training Settings
+* Git with LFS
 
-### Hardware Configuration
+### Required Accounts
+
+* HuggingFace account (for model downloads)
+
+* Bright Data account (for Bing Search API)
+
+* WandB account (optional, for training monitoring)
+
+### Assumptions
+
+* SFT training already completed
+
+* SFT checkpoints available (or using base models)
+
+***
+
+## STAGE 1: Local Toy RL Training
+
+**Goal**: Verify the entire RL pipeline works before deploying to cluster
+
+**Duration**: 1-2 hours
+
+**Strategy**: Try 3B model first, fallback to 0.5B if OOM
+
+### 1.1 Environment Setup
+
+#### Step 1: Create Conda Environment
+
+```bash
+# Navigate to ARPO directory
+cd C:/Users/user/Projects/ARPO/ARPO
+
+# Create conda environment
+conda create -n arpo python==3.10 -y
+conda activate arpo
+
+# Verify Python version
+python --version  # Should be 3.10.x
+```
+
+#### Step 2: Install PyTorch (CUDA 12.8)
+
+```bash
+# Install PyTorch with CUDA 12.8 (per CLAUDE.md requirements)
+pip uninstall -y torch torchvision torchaudio
+pip install --index-url https://download.pytorch.org/whl/cu128 torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1
+
+# Verify CUDA availability
+python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+```
+
+Expected output:
+
+```
+CUDA Available: True, GPUs: 1
+```
+
+#### Step 3: Install Flash Attention
+
+```bash
+pip install flash-attn --no-build-isolation
+```
+
+This may take 5-10 minutes to compile.
+
+#### Step 4: Install RL Dependencies
+
+```bash
+# Make sure you're in ARPO/ARPO directory
+pip install -r requirements.txt
+```
+
+#### Step 5: Install VERL Framework
+
+```bash
+cd verl_arpo_entropy
+pip install -e .
+cd ..
+
+# Verify installation
+python -c "import verl; print('VERL installed successfully')"
+```
+
+#### Step 6: Test Ray
+
+```bash
+# Start Ray cluster
+ray start --head --port=6379
+
+# Verify
+python -c "import ray; ray.init(address='auto'); print(ray.cluster_resources())"
+
+# Stop Ray
+ray stop
+```
+
+### 1.2 Download Models
+
+#### Download 3B Model (Try First)
+
+```bash
+# Create models directory
+mkdir -p models
+
+# Download Qwen2.5-3B-Instruct
+hf download Qwen/Qwen2.5-3B-Instruct --local-dir ./models/Qwen2.5-3B-Instruct
+
+# Verify download
+ls -lh ./models/Qwen2.5-3B-Instruct/
+# Should see: config.json, model.safetensors, tokenizer files
+```
+
+#### Download 0.5B Model (Fallback)
+
+```bash
+# Download Qwen2.5-0.5B-Instruct as backup
+hf download Qwen/Qwen2.5-0.5B-Instruct --local-dir ./models/Qwen2.5-0.5B-Instruct
+
+# Verify
+ls -lh ./models/Qwen2.5-0.5B-Instruct/
+```
+
+### 1.3 Prepare Toy Dataset
+
+#### Download Full Dataset
+
+```bash
+# Create dataset directory
+mkdir -p rl_datasets
+
+# Download ARPO-RL-Reasoning-10K dataset
+hf download dongguanting/ARPO-RL-Reasoning-10K train_10k.parquet \
+  --repo-type dataset \
+  --local-dir ./temp_rl
+
+# Move to rl_datasets
+mv temp_rl/train_10k.parquet rl_datasets/train.parquet
+
+# Download validation set
+hf download dongguanting/ARPO-RL-Reasoning-10K test.parquet \
+  --repo-type dataset \
+  --local-dir ./temp_rl
+
+mv temp_rl/test.parquet rl_datasets/valid.parquet
+
+# Clean up
+rm -rf temp_rl
+```
+
+#### Create Toy Subset (100 Samples)
+
+Create a Python script to generate toy dataset:
+
+**File**: `scripts/create_toy_dataset.py`
+
+```python
+import pandas as pd
+import sys
+
+def create_toy_dataset(input_file, output_file, num_samples=100):
+    """Create a toy dataset with limited samples for testing."""
+    print(f"Reading dataset from {input_file}...")
+    df = pd.read_parquet(input_file)
+
+    print(f"Original dataset size: {len(df)} samples")
+
+    # Take first N samples
+    df_toy = df.head(num_samples)
+
+    print(f"Toy dataset size: {len(df_toy)} samples")
+
+    # Save to parquet
+    df_toy.to_parquet(output_file, index=False)
+
+    print(f"Toy dataset saved to {output_file}")
+
+    # Display sample
+    print("\nSample prompt:")
+    print(df_toy.iloc[0]['prompt'][:200] + "...")
+    print(f"\nColumns: {df_toy.columns.tolist()}")
+
+if __name__ == "__main__":
+    create_toy_dataset(
+        input_file='rl_datasets/train.parquet',
+        output_file='rl_datasets/train_toy.parquet',
+        num_samples=100
+    )
+```
+
+Run the script:
+
+```bash
+python scripts/create_toy_dataset.py
+```
+
+Expected output:
+
+```
+Reading dataset from rl_datasets/train.parquet...
+Original dataset size: 10000 samples
+Toy dataset size: 100 samples
+Toy dataset saved to rl_datasets/train_toy.parquet
+```
+
+### 1.4 Configure Search API
+
+#### Step 1: Get Bright Data Credentials
+
+1. Sign up at <https://brightdata.com/>
+2. Navigate to **Zones** → **Web Scraper API**
+3. Create a new zone
+4. Note down:
+
+   * **API Key** (e.g., `brd-customer-abc-zone-xyz`)
+
+   * **Zone name** (e.g., `residential`)
+
+#### Step 2: Create Search Cache
+
+```bash
+mkdir -p search_cache
+echo '{}' > search_cache/search_cache.json
+chmod 644 search_cache/search_cache.json
+```
+
+#### Step 3: Update Configuration Files
+
+You need to update API keys in **3 locations**:
+
+**Location 1:** **`scripts/config/ppo_trainer.yaml`**
+
+Find the search tool section:
 
 ```yaml
-Platform: Windows 11 (MINGW64_NT-10.0-22631)
-GPU: NVIDIA GeForce RTX 5070 Ti
-VRAM: 16 GB
-CUDA Version: 12.9 (driver) / 12.8 (PyTorch runtime)
-CPUs: Multi-core (exact count varies)
-RAM: Sufficient for toy training
+actor_rollout_ref:
+  rollout:
+    tools:
+      tool_instances:
+        search:
+          class_path: verl.workers.rollout.tools.search_tool.BingSearchTool
+          params:
+            api_key: YOUR_API_KEY_HERE        # ← UPDATE THIS
+            zone: YOUR_ZONE_HERE                # ← UPDATE THIS
+            max_results: 10
+            result_length: 1000
+            location: us
+            cache_file: search_cache/search_cache.json
 ```
 
-### Model Configuration
+**Location 2:** **`verl_arpo_entropy/verl/workers/rollout/tools/config_example.yaml`**
+
+Copy and edit:
+
+```bash
+cp verl_arpo_entropy/verl/workers/rollout/tools/config_example.yaml \
+   verl_arpo_entropy/verl/workers/rollout/tools/config.yaml
+
+nano verl_arpo_entropy/verl/workers/rollout/tools/config.yaml
+```
+
+Update:
 
 ```yaml
-Model Name: Qwen2.5-0.5B-Instruct
-Model Size: 988 MB (0.5 billion parameters)
-Architecture: Qwen2ForCausalLM
-Location: ../models/Qwen2.5-0.5B-Instruct/
-Dtype: bfloat16 (BF16)
-Trust Remote Code: true (required for Qwen models)
+tools:
+  tool_instances:
+    python:
+      class_path: verl.workers.rollout.tools.python_tool.PythonTool
+      params:
+        conda_path: /home/user/anaconda3         # ← UPDATE with your conda path
+        conda_env: arpo
+        timeout: 60
+
+    search:
+      class_path: verl.workers.rollout.tools.search_tool.BingSearchTool
+      params:
+        api_key: YOUR_API_KEY_HERE               # ← UPDATE THIS
+        zone: YOUR_ZONE_HERE                      # ← UPDATE THIS
+        max_results: 10
+        result_length: 1000
+        location: us
+        cache_file: search_cache/search_cache.json
 ```
 
-**Model Architecture Details**:
-```json
-{
-  "hidden_size": 896,
-  "intermediate_size": 4864,
-  "num_attention_heads": 14,
-  "num_hidden_layers": 24,
-  "num_key_value_heads": 2,
-  "vocab_size": 151936,
-  "max_position_embeddings": 32768,
-  "sliding_window": 32768
-}
+**Location 3: Training script** (we'll create this next)
+
+#### Find Your Conda Path
+
+```bash
+which conda
+# Example output: /home/user/anaconda3/bin/conda
+# Use: /home/user/anaconda3 (without /bin/conda)
 ```
 
-### Dataset Configuration
+Or:
 
-```yaml
-Dataset Name: arpo_sft_toy
-Dataset Size: 500 samples
-Dataset File: ../../data/final_sft_edition9_toy.jsonl
-Dataset Format: ShareGPT (multi-turn conversations)
-Dataset Location: LLaMA-Factory/data/
-Total Size: 4.5 MB
+```bash
+echo $CONDA_PREFIX
+# While conda env is activated
 ```
 
-**Dataset Structure** (ShareGPT format):
-```json
-{
-  "conversations": [
-    {"from": "human", "value": "User question"},
-    {"from": "gpt", "value": "Assistant response with <python>code</python>"},
-    {"from": "human", "value": "<result>execution result</result>"},
-    {"from": "gpt", "value": "Final answer"}
-  ],
-  "system": "Optional system prompt"
-}
-```
+### 1.5 Create Toy ARPO Training Scripts
 
-### Training Hyperparameters
+#### Script 1: 3B Model (Try First)
 
-```yaml
-Training Method: Full parameter fine-tuning (not LoRA)
-Training Stage: sft
-Batch Size (per device): 2
-Gradient Accumulation Steps: 1
-Effective Batch Size: 2 (single GPU)
-Learning Rate: 7.0e-6
-LR Scheduler: cosine
-Warmup Ratio: 0.1
-Number of Epochs: 1.0
-Max Sequence Length: 4096 tokens
-Precision: BF16 (bfloat16)
-DeepSpeed: Disabled (not installed)
-Distributed Training: False (single GPU)
-```
-
-**Expected Training Metrics**:
-- Total samples: 500
-- Steps per epoch: ~250 (500 / 2)
-- Total training steps: ~250 (1 epoch)
-- Estimated time: 15-30 minutes
-- Checkpoint frequency: Every 50 steps
-- Logging frequency: Every 5 steps
-
-### Output Configuration
-
-```yaml
-Output Directory: ./checkpoints/qwen0.5b_toy/
-Save Strategy: steps
-Save Steps: 50
-Logging Steps: 5
-Overwrite Output Dir: true
-Plot Loss: true
-```
-
----
-
-## Bash Script Configuration
-
-### Script: `sft_train_toy.sh`
-
-#### Full Script Breakdown
+**File**: `scripts/ARPO_3B_Toy_Local.sh`
 
 ```bash
 #!/bin/bash
 
-#================== Basic Configuration ==================#
-# Use only first GPU for toy testing
-export CUDA_VISIBLE_DEVICES=0          # Only use GPU 0
-export PYTHONPATH=$(pwd):$PYTHONPATH   # Add current dir to Python path
-export USE_LIBUV=0                     # Fix PyTorch distributed on Windows
-export WANDB_DISABLED=true             # Disable Weights & Biases logging
+# ============================================================================
+# ARPO Local Toy Training Script - Qwen2.5-3B
+# Purpose: Test RL pipeline on local 16GB GPU before cluster deployment
+# Memory Strategy: Aggressive optimization to fit 3B model in 16GB
+# ============================================================================
 
-#================== Training Parameter Configuration ==================#
-# Single GPU training configuration
-NNODES=1                 # Number of nodes (machines)
-NODE_RANK=0              # This node's rank (0 for single node)
-PROC_PER_NODE=1          # Number of processes per node (1 GPU)
-MASTER_ADDR="127.0.0.1"  # Master node address (localhost)
-MASTER_PORT=29501        # Master node port (different from default 29500)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PARENT_DIR"
+echo "Working directory: $PARENT_DIR"
 
-# Output directory for toy model
-OUTPUT_DIR="./checkpoints/qwen0.5b_toy"
-mkdir -p ${OUTPUT_DIR}   # Create output directory if needed
+# ============ Environment Variables ============
+export PYTHONUNBUFFERED=1
+export HYDRA_FULL_ERROR=1
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export VERL_LOGGING_LEVEL=INFO
+export MKL_SERVICE_FORCE_INTEL=1
+export MKL_THREADING_LAYER=GNU
+export RAY_memory_usage_threshold=0.9
+export RAY_memory_monitor_refresh_ms=0
 
-# Path to the training script
-TRAIN_SCRIPT="../src/llamafactory/launcher.py"
+# Python path
+export PYTHONPATH="${PARENT_DIR}/verl_arpo_entropy:$PYTHONPATH"
 
-# Path to the toy training configuration file
-TRAIN_ARGS="yaml/qwen_toy.yaml"
+# ============ Basic Configuration ============
+PROJECT_NAME="local_toy_test"
+EXPERIMENT_NAME="ARPO_3B_toy_local"
 
-#================== Launch Training ==================#
-# Command to launch training
-USE_LIBUV=0 PYTHONPATH=$(pwd):$PYTHONPATH \
-  python ${TRAIN_SCRIPT} ${TRAIN_ARGS} 2>&1 | tee ${OUTPUT_DIR}/training.log
+CONFIG_PATH="${PARENT_DIR}/scripts/config"
+CONFIG_NAME="ppo_trainer.yaml"
+
+# ============ Hardware Settings ============
+NNODES=1
+N_GPUS_PER_NODE=1  # Single GPU
+
+# ============ Data Configuration ============
+PROMPT_KEY="prompt"
+TRAIN_BATCH_SIZE=4          # Very small for 16GB
+PPO_MINI_BATCH_SIZE=2       # Minimal
+MAX_PROMPT_LENGTH=512       # Short sequences
+MAX_RESPONSE_LENGTH=1024    # Short responses
+
+TRAIN_FILES="${PARENT_DIR}/rl_datasets/train_toy.parquet"
+VALID_FILES="${PARENT_DIR}/rl_datasets/train_toy.parquet"  # Use same for validation
+
+# ============ Model Configuration ============
+ACTOR_MODEL_PATH="${PARENT_DIR}/models/Qwen2.5-3B-Instruct"
+
+# ============ Rollout Configuration ============
+ROLLOUT_NAME="vllm"
+ROLLOUT_MODE="sync_with_tool"
+ROLLOUT_N=4              # Minimal rollouts
+INITIAL_ROLLOUTS=2       # Start with 2
+BEAM_SIZE=2              # Branch to 2
+BRANCH_PROBABILITY=0.5
+ENTROPY_WEIGHT=0.2
+
+# ============ Tool Configuration ============
+SEARCH_CACHE_PATH="${PARENT_DIR}/search_cache/search_cache.json"
+
+# UPDATE THIS with your Bright Data credentials
+BING_API_KEY="YOUR_API_KEY_HERE"
+BING_ZONE="YOUR_ZONE_HERE"
+
+# UPDATE THIS with your conda path
+CONDA_PATH="/home/user/anaconda3"  # Change to your conda installation
+
+# ============ Reward Configuration ============
+REWARD_MANAGER="naive"
+CUSTOM_REWARD_FUNCTION_PATH="${PARENT_DIR}/verl_arpo_entropy/verl/utils/reward_score/math.py"
+CUSTOM_REWARD_FUNCTION_NAME="compute_score"
+
+# ============ Training Configuration ============
+TOTAL_EPOCHS=1  # Just 1 epoch for testing
+SAVE_FREQ=5
+TEST_FREQ=5
+
+# ============ Paths ============
+SAVE_PATH="${PARENT_DIR}/checkpoints_toy/${EXPERIMENT_NAME}"
+ROLLOUT_SAVE_PATH="${SAVE_PATH}/rollout"
+
+# ============ WandB (Optional) ============
+WANDB_API_KEY=""  # Leave empty to disable
+
+# ============ Preparation ============
+if [ "$WANDB_API_KEY" != "" ]; then
+    wandb login --relogin $WANDB_API_KEY
+    export WANDB_DIR=${SAVE_PATH}
+fi
+
+mkdir -p $SAVE_PATH
+mkdir -p $ROLLOUT_SAVE_PATH
+
+echo "============================================"
+echo "ARPO 3B Local Toy Training"
+echo "============================================"
+echo "Model: ${ACTOR_MODEL_PATH}"
+echo "Dataset: ${TRAIN_FILES}"
+echo "Batch Size: ${TRAIN_BATCH_SIZE}"
+echo "Rollout Budget: ${ROLLOUT_N} (initial: ${INITIAL_ROLLOUTS})"
+echo "Save Path: ${SAVE_PATH}"
+echo "============================================"
+echo
+
+# ============ Start Training ============
+python3 -m verl.trainer.main_ppo \
+    --config-path=$CONFIG_PATH \
+    --config-name=$CONFIG_NAME \
+    algorithm.adv_estimator=grpo \
+    algorithm.kl_ctrl.kl_coef=0.0 \
+    data.train_files=${TRAIN_FILES} \
+    data.val_files=${VALID_FILES} \
+    data.prompt_key=${PROMPT_KEY} \
+    data.train_batch_size=${TRAIN_BATCH_SIZE} \
+    data.max_prompt_length=${MAX_PROMPT_LENGTH} \
+    data.max_response_length=${MAX_RESPONSE_LENGTH} \
+    actor_rollout_ref.model.path=${ACTOR_MODEL_PATH} \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$((2*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.kl_loss_coef=0.0 \
+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.actor.fsdp_config.param_offload=True \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
+    actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.name=${ROLLOUT_NAME} \
+    actor_rollout_ref.rollout.mode=${ROLLOUT_MODE} \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+    actor_rollout_ref.rollout.n=${ROLLOUT_N} \
+    actor_rollout_ref.rollout.initial_rollouts=${INITIAL_ROLLOUTS} \
+    actor_rollout_ref.rollout.beam_size=${BEAM_SIZE} \
+    actor_rollout_ref.rollout.branch_probability=${BRANCH_PROBABILITY} \
+    actor_rollout_ref.rollout.entropy_weight=${ENTROPY_WEIGHT} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.cache_file=${SEARCH_CACHE_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.api_key=${BING_API_KEY} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.zone=${BING_ZONE} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_path=${CONDA_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_env=arpo \
+    actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
+    reward_model.reward_manager=${REWARD_MANAGER} \
+    custom_reward_function.path=${CUSTOM_REWARD_FUNCTION_PATH} \
+    custom_reward_function.name=${CUSTOM_REWARD_FUNCTION_NAME} \
+    trainer.critic_warmup=0 \
+    trainer.logger="[console]" \
+    trainer.project_name=${PROJECT_NAME} \
+    trainer.experiment_name=${EXPERIMENT_NAME} \
+    trainer.n_gpus_per_node=${N_GPUS_PER_NODE} \
+    trainer.nnodes=${NNODES} \
+    trainer.save_freq=${SAVE_FREQ} \
+    trainer.test_freq=${TEST_FREQ} \
+    trainer.total_epochs=${TOTAL_EPOCHS} \
+    trainer.default_local_dir=${SAVE_PATH} \
+    trainer.val_before_train=False \
+    trainer.rollout_data_dir=${ROLLOUT_SAVE_PATH} \
+    hydra.run.dir=${SAVE_PATH}/outputs 2>&1 | tee ${SAVE_PATH}/run.log
+
+echo
+echo "============================================"
+echo "Training Complete!"
+echo "Logs: ${SAVE_PATH}/run.log"
+echo "Checkpoints: ${SAVE_PATH}"
+echo "============================================"
 ```
 
-#### Environment Variables Explained
+#### Script 2: 0.5B Model (Fallback if 3B OOMs)
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `CUDA_VISIBLE_DEVICES` | `0` | Only use GPU 0 (first GPU) for training |
-| `PYTHONPATH` | `$(pwd):$PYTHONPATH` | Add current directory to Python import path |
-| `USE_LIBUV` | `0` | Disable libuv in PyTorch (Windows compatibility fix) |
-| `WANDB_DISABLED` | `true` | Disable Weights & Biases experiment tracking |
-| `NNODES` | `1` | Single machine training |
-| `NODE_RANK` | `0` | This is the primary (only) node |
-| `PROC_PER_NODE` | `1` | Single process (single GPU) |
-| `MASTER_ADDR` | `127.0.0.1` | Localhost (not using distributed) |
-| `MASTER_PORT` | `29501` | Port for coordination (unused in single GPU) |
-
-#### Training Command Anatomy
+**File**: `scripts/ARPO_0.5B_Toy_Local.sh`
 
 ```bash
-USE_LIBUV=0 PYTHONPATH=$(pwd):$PYTHONPATH \
-  python ${TRAIN_SCRIPT} ${TRAIN_ARGS} 2>&1 | tee ${OUTPUT_DIR}/training.log
+#!/bin/bash
+
+# ============================================================================
+# ARPO Local Toy Training Script - Qwen2.5-0.5B (FALLBACK)
+# Purpose: Fallback if 3B model doesn't fit in 16GB
+# Memory Strategy: Relaxed settings since 0.5B is small
+# ============================================================================
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PARENT_DIR"
+echo "Working directory: $PARENT_DIR"
+
+# ============ Environment Variables ============
+export PYTHONUNBUFFERED=1
+export HYDRA_FULL_ERROR=1
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export VERL_LOGGING_LEVEL=INFO
+export MKL_SERVICE_FORCE_INTEL=1
+export MKL_THREADING_LAYER=GNU
+export RAY_memory_usage_threshold=0.9
+export RAY_memory_monitor_refresh_ms=0
+
+export PYTHONPATH="${PARENT_DIR}/verl_arpo_entropy:$PYTHONPATH"
+
+# ============ Basic Configuration ============
+PROJECT_NAME="local_toy_test"
+EXPERIMENT_NAME="ARPO_0.5B_toy_local_fallback"
+
+CONFIG_PATH="${PARENT_DIR}/scripts/config"
+CONFIG_NAME="ppo_trainer.yaml"
+
+# ============ Hardware Settings ============
+NNODES=1
+N_GPUS_PER_NODE=1
+
+# ============ Data Configuration ============
+PROMPT_KEY="prompt"
+TRAIN_BATCH_SIZE=8          # Can afford larger with 0.5B
+PPO_MINI_BATCH_SIZE=4
+MAX_PROMPT_LENGTH=1024      # Longer sequences OK
+MAX_RESPONSE_LENGTH=2048
+
+TRAIN_FILES="${PARENT_DIR}/rl_datasets/train_toy.parquet"
+VALID_FILES="${PARENT_DIR}/rl_datasets/train_toy.parquet"
+
+# ============ Model Configuration ============
+ACTOR_MODEL_PATH="${PARENT_DIR}/models/Qwen2.5-0.5B-Instruct"  # 0.5B model
+
+# ============ Rollout Configuration ============
+ROLLOUT_NAME="vllm"
+ROLLOUT_MODE="sync_with_tool"
+ROLLOUT_N=6              # More rollouts possible
+INITIAL_ROLLOUTS=3
+BEAM_SIZE=2
+BRANCH_PROBABILITY=0.5
+ENTROPY_WEIGHT=0.2
+
+# ============ Tool Configuration ============
+SEARCH_CACHE_PATH="${PARENT_DIR}/search_cache/search_cache.json"
+
+# UPDATE THESE
+BING_API_KEY="YOUR_API_KEY_HERE"
+BING_ZONE="YOUR_ZONE_HERE"
+CONDA_PATH="/home/user/anaconda3"
+
+# ============ Reward Configuration ============
+REWARD_MANAGER="naive"
+CUSTOM_REWARD_FUNCTION_PATH="${PARENT_DIR}/verl_arpo_entropy/verl/utils/reward_score/math.py"
+CUSTOM_REWARD_FUNCTION_NAME="compute_score"
+
+# ============ Training Configuration ============
+TOTAL_EPOCHS=1
+SAVE_FREQ=5
+TEST_FREQ=5
+
+# ============ Paths ============
+SAVE_PATH="${PARENT_DIR}/checkpoints_toy/${EXPERIMENT_NAME}"
+ROLLOUT_SAVE_PATH="${SAVE_PATH}/rollout"
+
+WANDB_API_KEY=""
+
+# ============ Preparation ============
+if [ "$WANDB_API_KEY" != "" ]; then
+    wandb login --relogin $WANDB_API_KEY
+    export WANDB_DIR=${SAVE_PATH}
+fi
+
+mkdir -p $SAVE_PATH
+mkdir -p $ROLLOUT_SAVE_PATH
+
+echo "============================================"
+echo "ARPO 0.5B Local Toy Training (FALLBACK)"
+echo "============================================"
+echo "Model: ${ACTOR_MODEL_PATH}"
+echo "Dataset: ${TRAIN_FILES}"
+echo "Batch Size: ${TRAIN_BATCH_SIZE}"
+echo "Rollout Budget: ${ROLLOUT_N} (initial: ${INITIAL_ROLLOUTS})"
+echo "Save Path: ${SAVE_PATH}"
+echo "============================================"
+echo
+
+# ============ Start Training ============
+python3 -m verl.trainer.main_ppo \
+    --config-path=$CONFIG_PATH \
+    --config-name=$CONFIG_NAME \
+    algorithm.adv_estimator=grpo \
+    algorithm.kl_ctrl.kl_coef=0.0 \
+    data.train_files=${TRAIN_FILES} \
+    data.val_files=${VALID_FILES} \
+    data.prompt_key=${PROMPT_KEY} \
+    data.train_batch_size=${TRAIN_BATCH_SIZE} \
+    data.max_prompt_length=${MAX_PROMPT_LENGTH} \
+    data.max_response_length=${MAX_RESPONSE_LENGTH} \
+    actor_rollout_ref.model.path=${ACTOR_MODEL_PATH} \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$((2*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.kl_loss_coef=0.0 \
+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.name=${ROLLOUT_NAME} \
+    actor_rollout_ref.rollout.mode=${ROLLOUT_MODE} \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
+    actor_rollout_ref.rollout.n=${ROLLOUT_N} \
+    actor_rollout_ref.rollout.initial_rollouts=${INITIAL_ROLLOUTS} \
+    actor_rollout_ref.rollout.beam_size=${BEAM_SIZE} \
+    actor_rollout_ref.rollout.branch_probability=${BRANCH_PROBABILITY} \
+    actor_rollout_ref.rollout.entropy_weight=${ENTROPY_WEIGHT} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.cache_file=${SEARCH_CACHE_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.api_key=${BING_API_KEY} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.zone=${BING_ZONE} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_path=${CONDA_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_env=arpo \
+    actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.ref.fsdp_config.param_offload=False \
+    reward_model.reward_manager=${REWARD_MANAGER} \
+    custom_reward_function.path=${CUSTOM_REWARD_FUNCTION_PATH} \
+    custom_reward_function.name=${CUSTOM_REWARD_FUNCTION_NAME} \
+    trainer.critic_warmup=0 \
+    trainer.logger="[console]" \
+    trainer.project_name=${PROJECT_NAME} \
+    trainer.experiment_name=${EXPERIMENT_NAME} \
+    trainer.n_gpus_per_node=${N_GPUS_PER_NODE} \
+    trainer.nnodes=${NNODES} \
+    trainer.save_freq=${SAVE_FREQ} \
+    trainer.test_freq=${TEST_FREQ} \
+    trainer.total_epochs=${TOTAL_EPOCHS} \
+    trainer.default_local_dir=${SAVE_PATH} \
+    trainer.val_before_train=False \
+    trainer.rollout_data_dir=${ROLLOUT_SAVE_PATH} \
+    hydra.run.dir=${SAVE_PATH}/outputs 2>&1 | tee ${SAVE_PATH}/run.log
+
+echo
+echo "============================================"
+echo "Training Complete!"
+echo "Logs: ${SAVE_PATH}/run.log"
+echo "Checkpoints: ${SAVE_PATH}"
+echo "============================================"
 ```
 
-**Breakdown**:
-1. `USE_LIBUV=0` - Set environment variable for this command
-2. `PYTHONPATH=$(pwd):$PYTHONPATH` - Set Python path for this command
-3. `python` - Launch Python interpreter
-4. `${TRAIN_SCRIPT}` - Execute `../src/llamafactory/launcher.py`
-5. `${TRAIN_ARGS}` - Pass config file `yaml/qwen_toy.yaml`
-6. `2>&1` - Redirect stderr to stdout
-7. `| tee ${OUTPUT_DIR}/training.log` - Display output AND save to log file
+### 1.6 Update Configuration Files
 
----
+Before running, you MUST update the API keys and conda path in the scripts:
 
-## Training Execution Flow
+```bash
+# Edit 3B script
+nano scripts/ARPO_3B_Toy_Local.sh
+# Update:
+# - BING_API_KEY
+# - BING_ZONE
+# - CONDA_PATH
 
-### High-Level Flow Diagram
-
-```mermaid
-graph TD
-    A[User runs: bash sft_train_toy.sh] --> B[Set Environment Variables]
-    B --> C[Create Output Directory]
-    C --> D[Launch Python Launcher]
-    D --> E[launcher.py: Set USE_LIBUV=0]
-    E --> F[launcher.py: Call run_exp]
-    F --> G[tuner.py: Parse Arguments]
-    G --> H[parser.py: Load YAML Config]
-    H --> I[parser.py: Parse into Dataclasses]
-    I --> J[tuner.py: Initialize Callbacks]
-    J --> K{Training Stage?}
-    K -->|sft| L[workflow.py: run_sft]
-    L --> M[loader.py: Load Dataset]
-    M --> N[loader.py: Load Model]
-    N --> O[trainer.py: Initialize Trainer]
-    O --> P[trainer.py: Train Loop]
-    P --> Q{Epoch Complete?}
-    Q -->|No| R[Forward Pass]
-    R --> S[Compute Loss]
-    S --> T[Backward Pass]
-    T --> U[Update Weights]
-    U --> V{Save Checkpoint?}
-    V -->|Yes| W[Save Model]
-    V -->|No| P
-    W --> P
-    Q -->|Yes| X[Save Final Checkpoint]
-    X --> Y[Training Complete]
+# Edit 0.5B script
+nano scripts/ARPO_0.5B_Toy_Local.sh
+# Update same variables
 ```
 
-### Detailed Execution Trace
+Make scripts executable:
 
-#### Phase 1: Script Initialization
-
-```
-┌─ bash sft_train_toy.sh
-│
-├─ Set Environment Variables
-│  ├─ CUDA_VISIBLE_DEVICES=0
-│  ├─ PYTHONPATH=<current_dir>:$PYTHONPATH
-│  ├─ USE_LIBUV=0
-│  └─ WANDB_DISABLED=true
-│
-├─ Create Output Directory
-│  └─ mkdir -p ./checkpoints/qwen0.5b_toy
-│
-└─ Launch Python Command
-   └─ python ../src/llamafactory/launcher.py yaml/qwen_toy.yaml
+```bash
+chmod +x scripts/ARPO_3B_Toy_Local.sh
+chmod +x scripts/ARPO_0.5B_Toy_Local.sh
 ```
 
-#### Phase 2: Python Launcher Initialization
+### 1.7 Run Local Toy Training
 
-**File**: `LLaMA-Factory/src/llamafactory/launcher.py`
+#### Attempt 1: Try 3B Model
+
+```bash
+# Navigate to ARPO directory
+cd C:/Users/user/Projects/ARPO/ARPO
+
+# Activate environment
+conda activate arpo
+
+# Run 3B training
+bash scripts/ARPO_3B_Toy_Local.sh
+```
+
+**Monitor GPU Memory:**
+
+In another terminal:
+
+```bash
+watch -n 1 nvidia-smi
+```
+
+**Watch for OOM Indicators:**
+
+❌ **Out of Memory Errors**:
+
+```
+RuntimeError: CUDA out of memory
+RuntimeError: vLLM OOM
+Process killed
+```
+
+✅ **Success Indicators**:
+
+```
+[INFO] Initializing Ray cluster...
+[INFO] Loading model from ./models/Qwen2.5-3B-Instruct
+[INFO] Creating Actor, Rollout, Ref workers...
+[INFO] Starting training for 1 epochs...
+Epoch 0 | Step 1 | Reward: 0.XX | Loss: 0.XXX
+```
+
+#### Attempt 2: Fallback to 0.5B (If 3B OOMs)
+
+If you see OOM errors, immediately:
+
+```bash
+# Stop training (Ctrl+C if still running)
+# Clean up Ray
+ray stop --force
+
+# Run 0.5B fallback
+bash scripts/ARPO_0.5B_Toy_Local.sh
+```
+
+Expected: Should complete in 20-40 minutes
+
+### 1.8 Verification Checklist
+
+After training completes, verify:
+
+```bash
+# Check logs
+tail -50 checkpoints_toy/ARPO_*/run.log
+
+# Check checkpoints
+ls -lh checkpoints_toy/ARPO_*/global_step_*/
+
+# Check rollout data
+ls -lh checkpoints_toy/ARPO_*/rollout/
+```
+
+**Success Criteria:**
+
+* ✅ Ray cluster initialized successfully
+
+* ✅ Model loaded without errors
+
+* ✅ Rollout generated responses with `<python>` and/or `<search>` tags
+
+* ✅ Python tool executed code successfully
+
+* ✅ Search tool returned results or cache hits
+
+* ✅ Reward function computed scores (values between 0-1)
+
+* ✅ Policy update completed without OOM
+
+* ✅ Checkpoint saved
+
+* ✅ Training log shows progress through 1 epoch
+
+* ✅ No crashes or hangs
+
+**Record which model worked:**
+
+* [ ] 3B model worked
+
+* [ ] 0.5B fallback used
+
+This information will help configure cluster training.
+
+***
+
+## STAGE 2: Cluster ARPO Production
+
+**Goal**: Train production ARPO model with Qwen2.5-7B on 8x A100 40GB GPUs
+
+**Duration**: 4-6 hours
+
+**Dataset**: Full 10K Reasoning dataset
+
+### 2.1 Transfer to Cluster
+
+#### Step 1: SSH to Cluster
+
+```bash
+ssh user@your-cluster-ip
+```
+
+#### Step 2: Clone Repository
+
+```bash
+cd ~
+git clone https://github.com/dongguanting/ARPO.git
+cd ARPO/ARPO
+```
+
+#### Step 3: Setup Environment
+
+```bash
+# Create conda environment
+conda create -n arpo python==3.10 -y
+conda activate arpo
+
+# Install PyTorch (CUDA 12.4 for cluster)
+pip3 install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+
+# Install flash-attn
+pip3 install flash-attn --no-build-isolation
+
+# Install requirements
+pip install -r requirements.txt
+
+# Install VERL
+cd verl_arpo_entropy
+pip install -e .
+cd ..
+```
+
+#### Step 4: Verify 8 GPUs
+
+```bash
+nvidia-smi
+# Should show 8 GPUs with ~40GB memory each
+
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPUs: {torch.cuda.device_count()}')"
+# Should output: CUDA: True, GPUs: 8
+```
+
+#### Step 5: Transfer Configuration
+
+Copy your verified API keys and settings from local machine:
+
+```bash
+# On local machine, copy API key and zone
+# Transfer via SCP or manually edit on cluster
+```
+
+### 2.2 Download Production Model
+
+Choose one:
+
+**Option A: Use Your SFT Checkpoint**
+
+```bash
+# If you have an SFT checkpoint from earlier training
+ACTOR_MODEL_PATH=/path/to/your/sft/checkpoint
+```
+
+**Option B: Use Base 7B Model**
+
+```bash
+# Download Qwen2.5-7B-Instruct
+mkdir -p /data/models
+hf download Qwen/Qwen2.5-7B-Instruct --local-dir /data/models/Qwen2.5-7B-Instruct
+
+# Verify
+ls -lh /data/models/Qwen2.5-7B-Instruct/
+```
+
+### 2.3 Download Full Dataset
+
+```bash
+cd ARPO/ARPO
+
+# Download full dataset
+hf download dongguanting/ARPO-RL-Reasoning-10K \
+  --repo-type dataset \
+  --local-dir ./rl_datasets
+
+# Verify files
+ls -lh rl_datasets/
+# Should have:
+# - train_10k.parquet (10,000 samples)
+# - test.parquet (300 samples)
+```
+
+### 2.4 Create Search Cache
+
+```bash
+mkdir -p search_cache
+echo '{}' > search_cache/search_cache.json
+```
+
+### 2.5 Create Production ARPO Script
+
+**File**: `scripts/ARPO_7B_Production_Cluster.sh`
+
+```bash
+#!/bin/bash
+
+# ============================================================================
+# ARPO Production Training Script - Qwen2.5-7B
+# Environment: 8x A100 40GB GPUs
+# Dataset: 10K Reasoning samples
+# ============================================================================
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PARENT_DIR"
+echo "Working directory: $PARENT_DIR"
+
+# ============ Environment Variables ============
+export PYTHONUNBUFFERED=1
+export HYDRA_FULL_ERROR=1
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export VERL_LOGGING_LEVEL=INFO
+export MKL_SERVICE_FORCE_INTEL=1
+export MKL_THREADING_LAYER=GNU
+export RAY_memory_usage_threshold=0.8
+export RAY_memory_monitor_refresh_ms=0
+
+export PYTHONPATH="${PARENT_DIR}/verl_arpo_entropy:$PYTHONPATH"
+
+# ============ Basic Configuration ============
+PROJECT_NAME="reasoning_tasks"
+EXPERIMENT_NAME="ARPO_Qwen2.5_7B_Reasoning"
+
+CONFIG_PATH="${PARENT_DIR}/scripts/config"  # MUST be absolute path
+CONFIG_NAME="ppo_trainer.yaml"
+
+# ============ Hardware Settings ============
+NNODES=1
+N_GPUS_PER_NODE=8  # 8 GPUs
+
+# ============ Data Configuration ============
+PROMPT_KEY="prompt"
+TRAIN_BATCH_SIZE=128        # Production batch size
+PPO_MINI_BATCH_SIZE=16
+MAX_PROMPT_LENGTH=1536      # Production sequence lengths
+MAX_RESPONSE_LENGTH=4096
+
+TRAIN_FILES="${PARENT_DIR}/rl_datasets/train_10k.parquet"
+VALID_FILES="${PARENT_DIR}/rl_datasets/test.parquet"
+
+# ============ Model Configuration ============
+# UPDATE THIS: Point to your SFT checkpoint or base 7B model
+ACTOR_MODEL_PATH="/data/models/Qwen2.5-7B-Instruct"  # ← CHANGE THIS
+
+# ============ Rollout Configuration ============
+ROLLOUT_NAME="vllm"
+ROLLOUT_MODE="sync_with_tool"
+ROLLOUT_N=16                # Full rollout budget
+INITIAL_ROLLOUTS=8
+BEAM_SIZE=2
+BRANCH_PROBABILITY=0.5
+ENTROPY_WEIGHT=0.2
+
+# ============ Tool Configuration ============
+SEARCH_CACHE_PATH="${PARENT_DIR}/search_cache/search_cache.json"
+
+# UPDATE THESE with your Bright Data credentials
+BING_API_KEY="YOUR_API_KEY_HERE"  # ← CHANGE THIS
+BING_ZONE="YOUR_ZONE_HERE"         # ← CHANGE THIS
+
+# UPDATE THIS with cluster conda path
+CONDA_PATH="/home/user/anaconda3"  # ← CHANGE THIS
+
+# ============ Reward Configuration ============
+REWARD_MANAGER="naive"
+CUSTOM_REWARD_FUNCTION_PATH="${PARENT_DIR}/verl_arpo_entropy/verl/utils/reward_score/math.py"
+CUSTOM_REWARD_FUNCTION_NAME="compute_score"
+
+# ============ Training Configuration ============
+TOTAL_EPOCHS=2  # Production: 2 epochs
+SAVE_FREQ=5     # Save every 5 steps
+TEST_FREQ=5     # Validate every 5 steps
+
+# ============ Paths ============
+SAVE_PATH="/data/checkpoints/${EXPERIMENT_NAME}"  # ← CHANGE THIS if needed
+ROLLOUT_SAVE_PATH="${SAVE_PATH}/rollout"
+
+# ============ WandB Configuration ============
+WANDB_API_KEY=""  # ← ADD YOUR WANDB KEY (optional)
+
+# ============ Preparation ============
+if [ "$WANDB_API_KEY" != "" ]; then
+    wandb login --relogin $WANDB_API_KEY
+    export WANDB_DIR=${SAVE_PATH}
+fi
+
+mkdir -p $SAVE_PATH
+mkdir -p $ROLLOUT_SAVE_PATH
+
+echo "============================================"
+echo "ARPO Production Training - Qwen2.5-7B"
+echo "============================================"
+echo "Model: ${ACTOR_MODEL_PATH}"
+echo "Dataset: ${TRAIN_FILES}"
+echo "Samples: 10,000"
+echo "Batch Size: ${TRAIN_BATCH_SIZE}"
+echo "GPUs: ${N_GPUS_PER_NODE}"
+echo "Rollout Budget: ${ROLLOUT_N} (initial: ${INITIAL_ROLLOUTS}, beam: ${BEAM_SIZE})"
+echo "Epochs: ${TOTAL_EPOCHS}"
+echo "Save Path: ${SAVE_PATH}"
+echo "============================================"
+echo
+
+# ============ Start Training ============
+python3 -m verl.trainer.main_ppo \
+    --config-path=$CONFIG_PATH \
+    --config-name=$CONFIG_NAME \
+    algorithm.adv_estimator=grpo \
+    algorithm.kl_ctrl.kl_coef=0.0 \
+    data.train_files=${TRAIN_FILES} \
+    data.val_files=${VALID_FILES} \
+    data.prompt_key=${PROMPT_KEY} \
+    data.train_batch_size=${TRAIN_BATCH_SIZE} \
+    data.max_prompt_length=${MAX_PROMPT_LENGTH} \
+    data.max_response_length=${MAX_RESPONSE_LENGTH} \
+    actor_rollout_ref.model.path=${ACTOR_MODEL_PATH} \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$((2*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.kl_loss_coef=0.0 \
+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.name=${ROLLOUT_NAME} \
+    actor_rollout_ref.rollout.mode=${ROLLOUT_MODE} \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+    actor_rollout_ref.rollout.n=${ROLLOUT_N} \
+    actor_rollout_ref.rollout.initial_rollouts=${INITIAL_ROLLOUTS} \
+    actor_rollout_ref.rollout.beam_size=${BEAM_SIZE} \
+    actor_rollout_ref.rollout.branch_probability=${BRANCH_PROBABILITY} \
+    actor_rollout_ref.rollout.entropy_weight=${ENTROPY_WEIGHT} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.cache_file=${SEARCH_CACHE_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.api_key=${BING_API_KEY} \
+    actor_rollout_ref.rollout.tools.tool_instances.search.params.zone=${BING_ZONE} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_path=${CONDA_PATH} \
+    actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_env=arpo \
+    actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
+    reward_model.reward_manager=${REWARD_MANAGER} \
+    custom_reward_function.path=${CUSTOM_REWARD_FUNCTION_PATH} \
+    custom_reward_function.name=${CUSTOM_REWARD_FUNCTION_NAME} \
+    trainer.critic_warmup=0 \
+    trainer.logger="[console, wandb]" \
+    trainer.project_name=${PROJECT_NAME} \
+    trainer.experiment_name=${EXPERIMENT_NAME} \
+    trainer.n_gpus_per_node=${N_GPUS_PER_NODE} \
+    trainer.nnodes=${NNODES} \
+    trainer.save_freq=${SAVE_FREQ} \
+    trainer.test_freq=${TEST_FREQ} \
+    trainer.total_epochs=${TOTAL_EPOCHS} \
+    trainer.default_local_dir=${SAVE_PATH} \
+    trainer.val_before_train=False \
+    trainer.rollout_data_dir=${ROLLOUT_SAVE_PATH} \
+    hydra.run.dir=${SAVE_PATH}/outputs 2>&1 | tee ${SAVE_PATH}/run.log
+
+echo
+echo "============================================"
+echo "ARPO Training Complete!"
+echo "============================================"
+echo "Logs: ${SAVE_PATH}/run.log"
+echo "Checkpoints: ${SAVE_PATH}/global_step_*"
+echo "============================================"
+```
+
+### 2.6 Update Production Script
+
+```bash
+nano scripts/ARPO_7B_Production_Cluster.sh
+```
+
+Update:
+
+* `ACTOR_MODEL_PATH`: Your 7B model path
+
+* `BING_API_KEY`: Your Bright Data API key
+
+* `BING_ZONE`: Your Bright Data zone
+
+* `CONDA_PATH`: Cluster conda installation path
+
+* `SAVE_PATH`: Where to save checkpoints
+
+* `WANDB_API_KEY`: (Optional) Your WandB key
+
+Make executable:
+
+```bash
+chmod +x scripts/ARPO_7B_Production_Cluster.sh
+```
+
+### 2.7 Run Production Training
+
+```bash
+# Use tmux for persistent session
+tmux new -s arpo_training
+
+# Activate environment
+conda activate arpo
+
+# Navigate to directory
+cd ~/ARPO/ARPO
+
+# Launch training
+bash scripts/ARPO_7B_Production_Cluster.sh
+
+# Detach from tmux: Ctrl+B, then D
+# Reattach later: tmux attach -t arpo_training
+```
+
+### 2.8 Monitor Training
+
+**In another terminal/SSH session:**
+
+```bash
+# Monitor GPU usage (all 8 should be active)
+watch -n 1 nvidia-smi
+
+# Watch training log
+tail -f /data/checkpoints/ARPO_Qwen2.5_7B_Reasoning/run.log
+
+# Check specific metrics
+grep "Reward" /data/checkpoints/ARPO_Qwen2.5_7B_Reasoning/run.log
+
+# If WandB is configured, view dashboard:
+# https://wandb.ai/your-username/reasoning_tasks
+```
+
+**Expected Progress:**
+
+```
+Epoch 0 | Step 1/78 | Reward: 0.25 | KL: 0.00 | Loss: 0.45
+Epoch 0 | Step 5/78 | Reward: 0.32 | KL: 0.00 | Loss: 0.38
+Epoch 0 | Step 10/78 | Reward: 0.41 | KL: 0.00 | Loss: 0.31
+...
+Epoch 0 | Step 78/78 | Reward: 0.58 | KL: 0.00 | Loss: 0.22
+Epoch 1 | Step 1/78 | Reward: 0.60 | KL: 0.00 | Loss: 0.20
+...
+Epoch 1 | Step 78/78 | Reward: 0.72 | KL: 0.00 | Loss: 0.15
+```
+
+**Training Time:**
+
+* \~3-4 minutes per step
+
+* \~78 steps per epoch (10000 / 128)
+
+* 2 epochs total
+
+* **Total: 4-6 hours**
+
+### 2.9 Convert ARPO Checkpoint to HuggingFace Format
+
+After training completes:
+
+```bash
+cd ~/ARPO/ARPO/merge_ckpt
+
+# Edit conversion script
+nano convert_checkpoint_from_verl_to_hf_qwen3.sh
+```
+
+Update the script:
+
+```bash
+#!/bin/bash
+
+# Source VERL checkpoint (find latest global_step_XXX)
+VERL_CHECKPOINT="/data/checkpoints/ARPO_Qwen2.5_7B_Reasoning/global_step_156"  # ← UPDATE
+
+# Output directory for HuggingFace format
+OUTPUT_DIR="/data/hf_checkpoints/qwen2.5-7b-arpo"  # ← UPDATE
+
+mkdir -p $OUTPUT_DIR
+
+python convert_verl_to_hf.py \
+    --verl_checkpoint $VERL_CHECKPOINT \
+    --output_dir $OUTPUT_DIR \
+    --model_type qwen2
+
+echo "Conversion complete: $OUTPUT_DIR"
+```
+
+Run conversion:
+
+```bash
+bash convert_checkpoint_from_verl_to_hf_qwen3.sh
+```
+
+Verify:
 
 ```python
-# Step 1: Set USE_LIBUV before any torch imports
-os.environ["USE_LIBUV"] = "0"
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Step 2: Import training function
-from llamafactory.train.tuner import run_exp
-
-# Step 3: Launch training
-def launch():
-    run_exp()
-
-if __name__ == "__main__":
-    launch()
-```
-
-**Execution**:
-```
-launcher.py:20  → Set os.environ["USE_LIBUV"] = "0"
-launcher.py:26  → Import run_exp from tuner.py
-launcher.py:30  → Call run_exp()
-```
-
-#### Phase 3: Argument Parsing
-
-**File**: `LLaMA-Factory/src/llamafactory/train/tuner.py`
-
-```python
-def run_exp():
-    # Step 1: Parse command-line arguments (YAML file path)
-    args = sys.argv[1:]  # ['yaml/qwen_toy.yaml']
-
-    # Step 2: Initialize callbacks
-    callbacks = [LogCallback(), ReporterCallback()]
-
-    # Step 3: Create training function config
-    config = {"args": args, "callbacks": callbacks}
-
-    # Step 4: Execute training
-    _training_function(config)
-
-def _training_function(config):
-    # Step 5: Parse all arguments from YAML
-    model_args, data_args, training_args, finetuning_args, generating_args = \
-        get_train_args(config["args"])
-
-    # Step 6: Route to SFT workflow
-    run_sft(model_args, data_args, training_args, finetuning_args,
-            generating_args, config["callbacks"])
-```
-
-**File**: `LLaMA-Factory/src/llamafactory/hparams/parser.py`
-
-```python
-def get_train_args(args):
-    # Step 1: Create argument parser
-    parser = HfArgumentParser((
-        ModelArguments,
-        DataArguments,
-        TrainingArguments,
-        FinetuningArguments,
-        GeneratingArguments
-    ))
-
-    # Step 2: Load YAML file
-    yaml_path = args[0]  # 'yaml/qwen_toy.yaml'
-    with open(yaml_path, 'r') as f:
-        yaml_dict = yaml.safe_load(f)
-
-    # Step 3: Parse into dataclass instances
-    return parser.parse_dict(yaml_dict)
-```
-
-**Parsed Configuration Objects**:
-
-```python
-# ModelArguments
-ModelArguments(
-    model_name_or_path='../models/Qwen2.5-0.5B-Instruct',
+model = AutoModelForCausalLM.from_pretrained(
+    "/data/hf_checkpoints/qwen2.5-7b-arpo",
+    device_map="auto",
     trust_remote_code=True
 )
 
-# DataArguments
-DataArguments(
-    dataset_dir='dataset_info',
-    dataset='arpo_sft_toy',
-    template='qwen',
-    cutoff_len=4096,
-    max_samples=500,
-    preprocessing_num_workers=4
+tokenizer = AutoTokenizer.from_pretrained(
+    "/data/hf_checkpoints/qwen2.5-7b-arpo",
+    trust_remote_code=True
 )
 
-# TrainingArguments
-TrainingArguments(
-    output_dir='checkpoints/qwen0.5b_toy',
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=1,
-    learning_rate=7.0e-6,
-    num_train_epochs=1.0,
-    lr_scheduler_type='cosine',
-    warmup_ratio=0.1,
-    bf16=True,
-    logging_steps=5,
-    save_steps=50,
-    overwrite_output_dir=True
-)
-
-# FinetuningArguments
-FinetuningArguments(
-    stage='sft',
-    do_train=True,
-    finetuning_type='full'
-)
+print("✅ ARPO model loaded successfully!")
+print(f"Model type: {model.config.model_type}")
+print(f"Vocab size: {len(tokenizer)}")
 ```
 
-#### Phase 4: Dataset Loading
+***
 
-**File**: `LLaMA-Factory/src/llamafactory/data/loader.py`
+## STAGE 3: Cluster AEPO Production
+
+**Goal**: Train AEPO with entropy-balancing mechanisms
+
+**Duration**: 4-6 hours
+
+**Reuses**: Same dataset and search cache from ARPO
+
+### 3.1 Setup AEPO Environment
+
+```bash
+cd ~/ARPO/AEPO
+
+# Create new conda environment
+conda create -n aepo python==3.10 -y
+conda activate aepo
+
+# Install PyTorch
+pip3 install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+
+# Install flash-attn
+pip3 install flash-attn --no-build-isolation
+
+# Install requirements
+pip install -r requirements.txt
+
+# Install VERL
+cd verl_aepo_entropy
+pip install -e .
+cd ..
+```
+
+### 3.2 Create Production AEPO Script
+
+**File**: `scripts/AEPO_7B_Production_Cluster.sh`
+
+```bash
+#!/bin/bash
+
+# ============================================================================
+# AEPO Production Training Script - Qwen2.5-7B
+# Environment: 8x A100 40GB GPUs
+# Dataset: 10K Reasoning samples (shared with ARPO)
+# ============================================================================
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PARENT_DIR"
+echo "Working directory: $PARENT_DIR"
+
+# ============ Environment Variables ============
+export PYTHONUNBUFFERED=1
+export HYDRA_FULL_ERROR=1
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export VERL_LOGGING_LEVEL=INFO
+export MKL_SERVICE_FORCE_INTEL=1
+export MKL_THREADING_LAYER=GNU
+export RAY_memory_usage_threshold=0.8
+export RAY_memory_monitor_refresh_ms=0
+
+export PYTHONPATH="${PARENT_DIR}/verl_aepo_entropy:$PYTHONPATH"
+
+# ============ Basic Configuration ============
+PROJECT_NAME="reasoning_tasks"
+EXPERIMENT_NAME="AEPO_Qwen2.5_7B_Reasoning"
+
+CONFIG_PATH="${PARENT_DIR}/scripts/config"  # MUST be absolute path
+CONFIG_NAME="ppo_trainer_dr.yaml"  # AEPO config
+
+# ============ Hardware Settings ============
+NNODES=1
+N_GPUS_PER_NODE=8
+
+# ============ AEPO-Specific Flags ============
+ENABLE_DYNAMIC_ROLLOUTS=False
+ENABLE_ENTROPY_BALANCED_CLIPPING=True
+ENABLE_ENTROPY_BALANCED_ADVANTAGE=True
+
+# ============ Data Configuration ============
+PROMPT_KEY="prompt"
+TRAIN_BATCH_SIZE=128
+PPO_MINI_BATCH_SIZE=16
+MAX_PROMPT_LENGTH=1536
+MAX_RESPONSE_LENGTH=4096
+
+# REUSE ARPO DATASET
+TRAIN_FILES="${PARENT_DIR}/../ARPO/rl_datasets/train_10k.parquet"
+VALID_FILES="${PARENT_DIR}/../ARPO/rl_datasets/test.parquet"
+
+# ============ Model Configuration ============
+# UPDATE THIS: Same model as ARPO
+ACTOR_MODEL_PATH="/data/models/Qwen2.5-7B-Instruct"  # ← CHANGE THIS
+
+# ============ Rollout Configuration ============
+ROLLOUT_NAME="vllm"
+ROLLOUT_MODE="sync_with_tool"
+ROLLOUT_N=16
+INITIAL_ROLLOUTS=8
+BEAM_SIZE=2
+BRANCH_PROBABILITY=0.5
+ENTROPY_WEIGHT=0.2
+
+# ============ Tool Configuration ============
+# REUSE ARPO SEARCH CACHE
+SEARCH_CACHE_PATH="${PARENT_DIR}/../ARPO/search_cache/search_cache.json"
+
+# UPDATE THESE
+BING_API_KEY="YOUR_API_KEY_HERE"  # ← CHANGE THIS
+BING_ZONE="YOUR_ZONE_HERE"         # ← CHANGE THIS
+CONDA_PATH="/home/user/anaconda3"  # ← CHANGE THIS
+
+# ============ Reward Configuration ============
+REWARD_MANAGER="naive"
+CUSTOM_REWARD_FUNCTION_PATH="${PARENT_DIR}/verl_aepo_entropy/verl/utils/reward_score/math.py"
+CUSTOM_REWARD_FUNCTION_NAME="compute_score"
+
+# ============ Training Configuration ============
+TOTAL_EPOCHS=2
+SAVE_FREQ=5
+TEST_FREQ=5
+
+# ============ Paths ============
+SAVE_PATH="/data/checkpoints/${EXPERIMENT_NAME}"  # ← CHANGE THIS if needed
+ROLLOUT_SAVE_PATH="${SAVE_PATH}/rollout"
+
+# ============ WandB Configuration ============
+WANDB_API_KEY=""  # ← ADD YOUR WANDB KEY (optional)
+
+# ============ Preparation ============
+if [ "$WANDB_API_KEY" != "" ]; then
+    wandb login --relogin $WANDB_API_KEY
+    export WANDB_DIR=${SAVE_PATH}
+fi
+
+mkdir -p $SAVE_PATH
+mkdir -p $ROLLOUT_SAVE_PATH
+
+echo "============================================"
+echo "AEPO Production Training - Qwen2.5-7B"
+echo "============================================"
+echo "Model: ${ACTOR_MODEL_PATH}"
+echo "Dataset: ${TRAIN_FILES}"
+echo "Batch Size: ${TRAIN_BATCH_SIZE}"
+echo "GPUs: ${N_GPUS_PER_NODE}"
+echo "AEPO Modules:"
+echo "  - Dynamic Rollouts: ${ENABLE_DYNAMIC_ROLLOUTS}"
+echo "  - Entropy Clipping: ${ENABLE_ENTROPY_BALANCED_CLIPPING}"
+echo "  - Entropy Advantage: ${ENABLE_ENTROPY_BALANCED_ADVANTAGE}"
+echo "Epochs: ${TOTAL_EPOCHS}"
+echo "Save Path: ${SAVE_PATH}"
+echo "============================================"
+echo
+
+# ============ Start Training ============
+python3 -m verl.trainer.main_ppo \
+    --config-path=$CONFIG_PATH \
+    --config-name=$CONFIG_NAME \
+    algorithm.adv_estimator=grpo \
+    algorithm.kl_ctrl.kl_coef=0.0 \
+    data.train_files=${TRAIN_FILES} \
+    data.val_files=${VALID_FILES} \
+    data.prompt_key=${PROMPT_KEY} \
+    data.train_batch_size=${TRAIN_BATCH_SIZE} \
+    data.max_prompt_length=${MAX_PROMPT_LENGTH} \
+    data.max_response_length=${MAX_RESPONSE_LENGTH} \
+    actor_rollout_ref.model.path=${ACTOR_MODEL_PATH} \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.enable_entropy_balanced_clipping=${ENABLE_ENTROPY_BALANCED_CLIPPING} \
+    actor_rollout_ref.actor.enable_entropy_balanced_advantage=${ENABLE_ENTROPY_BALANCED_ADVANTAGE} \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$((2*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.kl_loss_coef=0.0 \
+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.enable_dynamic_rollouts=${ENABLE_DYNAMIC_ROLLOUTS} \
+    actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.name=${ROLLOUT_NAME} \
+    actor_rollout_ref.rollout.mode=${ROLLOUT_MODE} \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+    actor_rollout_ref.rollout.n=${ROLLOUT_N} \
+    actor_rollout_ref.rollout.initial_rollouts=${INITIAL_ROLLOUTS} \
+    actor_rollout_ref.rollout.beam_size=${BEAM_SIZE} \
+    actor_rollout_ref.rollout.branch_probability=${BRANCH_PROBABILITY} \
+    actor_rollout_ref.rollout.entropy_weight=${ENTROPY_WEIGHT} \
+    ++actor_rollout_ref.rollout.tools.tool_instances.search.params.cache_file=${SEARCH_CACHE_PATH} \
+    ++actor_rollout_ref.rollout.tools.tool_instances.search.params.api_key=${BING_API_KEY} \
+    ++actor_rollout_ref.rollout.tools.tool_instances.search.params.zone=${BING_ZONE} \
+    ++actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_path=${CONDA_PATH} \
+    ++actor_rollout_ref.rollout.tools.tool_instances.python.params.conda_env=aepo \
+    actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=$((4*(MAX_PROMPT_LENGTH+MAX_RESPONSE_LENGTH))) \
+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
+    reward_model.reward_manager=${REWARD_MANAGER} \
+    custom_reward_function.path=${CUSTOM_REWARD_FUNCTION_PATH} \
+    custom_reward_function.name=${CUSTOM_REWARD_FUNCTION_NAME} \
+    trainer.critic_warmup=0 \
+    trainer.logger="[console, wandb]" \
+    trainer.project_name=${PROJECT_NAME} \
+    trainer.experiment_name=${EXPERIMENT_NAME} \
+    trainer.n_gpus_per_node=${N_GPUS_PER_NODE} \
+    trainer.nnodes=${NNODES} \
+    trainer.save_freq=${SAVE_FREQ} \
+    trainer.test_freq=${TEST_FREQ} \
+    trainer.total_epochs=${TOTAL_EPOCHS} \
+    trainer.default_local_dir=${SAVE_PATH} \
+    trainer.val_before_train=False \
+    trainer.rollout_data_dir=${ROLLOUT_SAVE_PATH} \
+    hydra.run.dir=${SAVE_PATH}/outputs 2>&1 | tee ${SAVE_PATH}/run.log
+
+echo
+echo "============================================"
+echo "AEPO Training Complete!"
+echo "============================================"
+echo "Logs: ${SAVE_PATH}/run.log"
+echo "Checkpoints: ${SAVE_PATH}/global_step_*"
+echo "============================================"
+```
+
+### 3.3 Update AEPO Script
+
+```bash
+cd ~/ARPO/AEPO
+nano scripts/AEPO_7B_Production_Cluster.sh
+```
+
+Update same variables as ARPO script:
+
+* `ACTOR_MODEL_PATH`
+
+* `BING_API_KEY`
+
+* `BING_ZONE`
+
+* `CONDA_PATH`
+
+* `SAVE_PATH`
+
+* `WANDB_API_KEY`
+
+Make executable:
+
+```bash
+chmod +x scripts/AEPO_7B_Production_Cluster.sh
+```
+
+### 3.4 Run AEPO Training
+
+```bash
+# Use tmux
+tmux new -s aepo_training
+
+# Activate environment
+conda activate aepo
+
+# Navigate to directory
+cd ~/ARPO/AEPO
+
+# Launch training
+bash scripts/AEPO_7B_Production_Cluster.sh
+
+# Detach: Ctrl+B, then D
+# Reattach: tmux attach -t aepo_training
+```
+
+### 3.5 Monitor AEPO Training
+
+Same monitoring as ARPO:
+
+```bash
+watch -n 1 nvidia-smi
+tail -f /data/checkpoints/AEPO_Qwen2.5_7B_Reasoning/run.log
+```
+
+**Expected**: Similar or better final reward than ARPO (0.6-0.8+)
+
+### 3.6 Convert AEPO Checkpoint
+
+```bash
+cd ~/ARPO/AEPO/merge_ckpt
+
+# Edit conversion script (similar to ARPO)
+nano convert_checkpoint_from_verl_to_hf_qwen3.sh
+```
+
+Update paths:
+
+```bash
+VERL_CHECKPOINT="/data/checkpoints/AEPO_Qwen2.5_7B_Reasoning/global_step_156"
+OUTPUT_DIR="/data/hf_checkpoints/qwen2.5-7b-aepo"
+```
+
+Run conversion:
+
+```bash
+bash convert_checkpoint_from_verl_to_hf_qwen3.sh
+```
+
+***
+
+## STAGE 4: Verification
+
+**Goal**: Test both models generate tool-augmented responses
+
+### 4.1 Test ARPO Model
+
+Create test script: `scripts/test_arpo_model.py`
 
 ```python
-def get_dataset(template, model_args, data_args, training_args, stage, tokenizer, processor):
-    # Step 1: Load dataset info registry
-    dataset_info = load_dataset_info(data_args.dataset_dir)  # 'dataset_info'
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
-    # Step 2: Get dataset attributes for 'arpo_sft_toy'
-    dataset_attr = dataset_info['arpo_sft_toy']
-    # {
-    #   "file_name": "../../data/final_sft_edition9_toy.jsonl",
-    #   "formatting": "sharegpt",
-    #   "columns": {"messages": "conversations", "system": "system"}
-    # }
+def test_model(model_path, model_name):
+    print(f"\n{'='*60}")
+    print(f"Testing {model_name}")
+    print(f"{'='*60}\n")
 
-    # Step 3: Construct file path
-    local_path = os.path.join(data_args.dataset_dir, dataset_attr['file_name'])
-    # 'dataset_info/../../data/final_sft_edition9_toy.jsonl'
-    # Resolves to: '../data/final_sft_edition9_toy.jsonl'
-
-    # Step 4: Load raw dataset
-    dataset = load_dataset('json', data_files=local_path)
-    # Loads 500 samples from JSONL file
-
-    # Step 5: Apply chat template and tokenize
-    dataset = preprocess_dataset(dataset, tokenizer, template, data_args)
-
-    return dataset
-```
-
-**Data Processing Pipeline**:
-
-```
-Raw JSONL Sample:
-{
-  "conversations": [
-    {"from": "human", "value": "What is 2+2?"},
-    {"from": "gpt", "value": "The answer is 4."}
-  ]
-}
-        ↓
-Apply Chat Template:
-"<|im_start|>system\n...<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\nThe answer is 4.<|im_end|>"
-        ↓
-Tokenize:
-{
-  "input_ids": [151644, 872, 198, ...],
-  "attention_mask": [1, 1, 1, ...],
-  "labels": [-100, -100, ..., 872, 198]  # -100 masks prompt tokens
-}
-        ↓
-Batched Dataset Ready for Training
-```
-
-#### Phase 5: Model Loading
-
-**File**: `LLaMA-Factory/src/llamafactory/model/loader.py`
-
-```python
-def load_model(model_args, finetuning_args, training_args):
-    # Step 1: Load configuration
-    config = AutoConfig.from_pretrained(
-        model_args.model_name_or_path,  # '../models/Qwen2.5-0.5B-Instruct'
-        trust_remote_code=True
-    )
-
-    # Step 2: Patch configuration for training
-    config.use_cache = False  # Disable KV cache for training
-
-    # Step 3: Load model
+    # Load model
+    print(f"Loading model from {model_path}...")
     model = AutoModelForCausalLM.from_pretrained(
-        model_args.model_name_or_path,
-        config=config,
-        torch_dtype=torch.bfloat16,
+        model_path,
+        device_map="auto",
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_path,
         trust_remote_code=True
     )
 
-    # Step 4: Enable gradient checkpointing (if configured)
-    if training_args.gradient_checkpointing:
-        model.gradient_checkpointing_enable()
+    print(f"✅ Model loaded successfully!")
+    print(f"Model type: {model.config.model_type}")
+    print(f"Vocab size: {len(tokenizer)}\n")
 
-    return model
-```
+    # Test prompts
+    test_prompts = [
+        "What is the derivative of x^3 + 2x^2 - 5x + 3?",
+        "Calculate 12345 * 67890",
+        "What is the capital of France? Search online if needed."
+    ]
 
-**Model Loading Sequence**:
-```
-1. Load config.json           → Qwen2Config
-2. Load model.safetensors     → Load 988 MB of weights
-3. Configure for training     → Disable cache, set dtype
-4. Move to GPU                → model.to('cuda:0')
-5. Set training mode          → model.train()
-```
+    for i, prompt in enumerate(test_prompts, 1):
+        print(f"\n--- Test {i} ---")
+        print(f"Prompt: {prompt}\n")
 
-#### Phase 6: Trainer Initialization
-
-**File**: `LLaMA-Factory/src/llamafactory/train/sft/trainer.py`
-
-```python
-class CustomSeq2SeqTrainer(Seq2SeqTrainer):
-    def __init__(self, model, args, data_collator, train_dataset, **kwargs):
-        super().__init__(
-            model=model,
-            args=args,
-            data_collator=data_collator,
-            train_dataset=train_dataset,
-            **kwargs
+        messages = [{"role": "user", "content": prompt}]
+        text = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False
         )
 
-    def create_optimizer(self):
-        # Create AdamW optimizer
-        optimizer = AdamW(
-            self.model.parameters(),
-            lr=self.args.learning_rate,
-            betas=(0.9, 0.999),
-            eps=1e-8,
-            weight_decay=0.0
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=512,
+                do_sample=False,
+                temperature=1.0
+            )
+
+        response = tokenizer.decode(
+            outputs[0][inputs['input_ids'].shape[1]:],
+            skip_special_tokens=False
         )
-        return optimizer
 
-    def create_scheduler(self, optimizer):
-        # Create cosine learning rate scheduler
-        scheduler = get_cosine_schedule_with_warmup(
-            optimizer,
-            num_warmup_steps=int(self.args.warmup_ratio * self.args.max_steps),
-            num_training_steps=self.args.max_steps
-        )
-        return scheduler
+        print(f"Response: {response}\n")
+
+        # Check for tool usage
+        has_python = "<python>" in response
+        has_search = "<search>" in response
+        has_answer = "<answer>" in response
+
+        print(f"Tool usage:")
+        print(f"  - Python: {'✅' if has_python else '❌'}")
+        print(f"  - Search: {'✅' if has_search else '❌'}")
+        print(f"  - Answer: {'✅' if has_answer else '❌'}")
+
+if __name__ == "__main__":
+    # Test ARPO model
+    test_model(
+        model_path="/data/hf_checkpoints/qwen2.5-7b-arpo",
+        model_name="ARPO Model"
+    )
 ```
 
-**Trainer Setup**:
-```
-Trainer Components:
-├─ Model: Qwen2ForCausalLM (BF16)
-├─ Optimizer: AdamW (lr=7e-6)
-├─ Scheduler: Cosine with warmup (10% warmup)
-├─ Data Collator: DataCollatorForSeq2Seq
-├─ Train Dataset: 500 samples
-└─ Callbacks: LogCallback, ReporterCallback
+Run test:
+
+```bash
+python scripts/test_arpo_model.py
 ```
 
-#### Phase 7: Training Loop
-
-**File**: HuggingFace Transformers `Trainer.train()`
+### 4.2 Test AEPO Model
 
 ```python
-def train(self):
-    # Total steps = (500 samples / 2 batch size) * 1 epoch = 250 steps
-
-    for epoch in range(num_epochs):  # 1 epoch
-        for step, batch in enumerate(train_dataloader):
-            # Step 1: Forward pass
-            outputs = model(**batch)
-            loss = outputs.loss
-
-            # Step 2: Backward pass
-            loss.backward()
-
-            # Step 3: Gradient clipping (if configured)
-            if max_grad_norm is not None:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
-            # Step 4: Optimizer step
-            optimizer.step()
-            optimizer.zero_grad()
-
-            # Step 5: Scheduler step
-            scheduler.step()
-
-            # Step 6: Logging (every 5 steps)
-            if step % logging_steps == 0:
-                log_metrics({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]})
-
-            # Step 7: Save checkpoint (every 50 steps)
-            if step % save_steps == 0:
-                save_checkpoint(f"checkpoint-{step}")
-
-    # Step 8: Save final checkpoint
-    save_checkpoint("final")
+# Same script, just change model_path
+test_model(
+    model_path="/data/hf_checkpoints/qwen2.5-7b-aepo",
+    model_name="AEPO Model"
+)
 ```
 
-**Training Loop Flow**:
+### 4.3 Compare Models
 
-```mermaid
-graph LR
-    A[Load Batch] --> B[Forward Pass]
-    B --> C[Compute Loss]
-    C --> D[Backward Pass]
-    D --> E[Clip Gradients]
-    E --> F[Optimizer Step]
-    F --> G[LR Schedule Step]
-    G --> H{Log?}
-    H -->|Yes every 5 steps| I[Log Metrics]
-    H -->|No| J{Save?}
-    I --> J
-    J -->|Yes every 50 steps| K[Save Checkpoint]
-    J -->|No| L{More Batches?}
-    K --> L
-    L -->|Yes| A
-    L -->|No| M[Epoch Complete]
-```
-
-**Single Training Step Breakdown**:
-
-```
-Step N (e.g., step 100):
-┌─────────────────────────────────────────────────────
-│ 1. Load Batch (2 samples)
-│    ├─ input_ids: [2, 4096] tensor
-│    ├─ attention_mask: [2, 4096] tensor
-│    └─ labels: [2, 4096] tensor
-│
-│ 2. Forward Pass
-│    ├─ model(input_ids, attention_mask)
-│    ├─ logits: [2, 4096, 151936] (batch, seq_len, vocab_size)
-│    └─ loss = CrossEntropyLoss(logits, labels)
-│
-│ 3. Backward Pass
-│    ├─ loss.backward()
-│    └─ Compute gradients for all parameters
-│
-│ 4. Optimizer Step
-│    ├─ Clip gradients (if enabled)
-│    ├─ optimizer.step()  # Update weights
-│    └─ optimizer.zero_grad()  # Clear gradients
-│
-│ 5. LR Scheduler Step
-│    └─ Cosine schedule: lr decreases from 7e-6
-│
-│ 6. Logging (if step % 5 == 0)
-│    └─ Print: {"loss": 2.456, "lr": 6.8e-6, "step": 100}
-│
-│ 7. Save Checkpoint (if step % 50 == 0)
-│    └─ Save: ./checkpoints/qwen0.5b_toy/checkpoint-100/
-│
-└─────────────────────────────────────────────────────
-```
-
-#### Phase 8: Checkpoint Saving
-
-**File**: `LLaMA-Factory/src/llamafactory/train/sft/trainer.py`
+Create comparison script: `scripts/compare_models.py`
 
 ```python
-def _save_checkpoint(self, output_dir):
-    # Step 1: Save model weights
-    self.model.save_pretrained(output_dir)
-    # Saves: model.safetensors (or pytorch_model.bin)
+import json
+import pandas as pd
+import matplotlib.pyplot as plt
 
-    # Step 2: Save tokenizer
-    self.tokenizer.save_pretrained(output_dir)
-    # Saves: tokenizer.json, tokenizer_config.json, etc.
+def load_training_logs(arpo_log, aepo_log):
+    """Parse training logs and extract metrics."""
 
-    # Step 3: Save training state
-    torch.save(self.optimizer.state_dict(), f"{output_dir}/optimizer.pt")
-    torch.save(self.lr_scheduler.state_dict(), f"{output_dir}/scheduler.pt")
+    def parse_log(log_file):
+        rewards = []
+        losses = []
+        with open(log_file, 'r') as f:
+            for line in f:
+                if "Reward:" in line:
+                    # Parse: Epoch X | Step Y | Reward: 0.XX | Loss: 0.XX
+                    parts = line.split('|')
+                    for part in parts:
+                        if "Reward:" in part:
+                            reward = float(part.split(':')[1].strip())
+                            rewards.append(reward)
+                        if "Loss:" in part:
+                            loss = float(part.split(':')[1].strip())
+                            losses.append(loss)
+        return rewards, losses
 
-    # Step 4: Save training arguments
-    torch.save(self.args, f"{output_dir}/training_args.bin")
+    arpo_rewards, arpo_losses = parse_log(arpo_log)
+    aepo_rewards, aepo_losses = parse_log(aepo_log)
 
-    # Step 5: Save trainer state (step, epoch, etc.)
-    with open(f"{output_dir}/trainer_state.json", 'w') as f:
-        json.dump(self.state.to_dict(), f)
-```
-
-**Checkpoint Structure**:
-```
-checkpoints/qwen0.5b_toy/
-├── checkpoint-50/
-│   ├── model.safetensors        # Model weights at step 50
-│   ├── config.json              # Model configuration
-│   ├── tokenizer.json           # Tokenizer
-│   ├── tokenizer_config.json    # Tokenizer config
-│   ├── optimizer.pt             # Optimizer state
-│   ├── scheduler.pt             # LR scheduler state
-│   ├── trainer_state.json       # Training state
-│   └── training_args.bin        # Training arguments
-├── checkpoint-100/
-├── checkpoint-150/
-├── checkpoint-200/
-├── checkpoint-250/              # Final checkpoint
-└── training.log                 # Training log
-```
-
----
-
-## Component Interactions
-
-### System Architecture Diagram
-
-```mermaid
-graph TB
-    subgraph "User Interface"
-        A[bash sft_train_toy.sh]
-    end
-
-    subgraph "Configuration Layer"
-        B[yaml/qwen_toy.yaml]
-        C[dataset_info/dataset_info.json]
-    end
-
-    subgraph "Python Entry Point"
-        D[launcher.py]
-    end
-
-    subgraph "Training Orchestration"
-        E[tuner.py: run_exp]
-        F[parser.py: Parse Args]
-        G[workflow.py: run_sft]
-    end
-
-    subgraph "Data Pipeline"
-        H[loader.py: Load Dataset]
-        I[processor.py: Preprocess]
-        J[collator.py: Batch Collation]
-    end
-
-    subgraph "Model Pipeline"
-        K[loader.py: Load Model]
-        L[adapter.py: Apply LoRA if needed]
-        M[Model: Qwen2ForCausalLM]
-    end
-
-    subgraph "Training Loop"
-        N[trainer.py: CustomSeq2SeqTrainer]
-        O[HF Trainer: train]
-        P[Forward/Backward Pass]
-        Q[Optimizer Step]
-        R[Save Checkpoint]
-    end
-
-    subgraph "Storage"
-        S[Dataset: final_sft_edition9_toy.jsonl]
-        T[Model: Qwen2.5-0.5B-Instruct]
-        U[Checkpoints: qwen0.5b_toy/]
-    end
-
-    A --> B
-    A --> D
-    B --> F
-    C --> H
-    D --> E
-    E --> F
-    F --> G
-    G --> H
-    G --> K
-    H --> S
-    H --> I
-    I --> J
-    K --> T
-    K --> L
-    L --> M
-    M --> N
-    J --> N
-    N --> O
-    O --> P
-    P --> Q
-    Q --> R
-    R --> U
-
-    style A fill:#e1f5ff
-    style B fill:#fff4e6
-    style C fill:#fff4e6
-    style S fill:#f3e5f5
-    style T fill:#f3e5f5
-    style U fill:#c8e6c9
-```
-
-### Data Flow Diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Script as sft_train_toy.sh
-    participant Launcher as launcher.py
-    participant Tuner as tuner.py
-    participant Parser as parser.py
-    participant Workflow as workflow.py
-    participant DataLoader as loader.py
-    participant ModelLoader as model/loader.py
-    participant Trainer as trainer.py
-    participant GPU
-
-    User->>Script: bash sft_train_toy.sh
-    Script->>Script: Set environment variables
-    Script->>Launcher: python launcher.py yaml/qwen_toy.yaml
-    Launcher->>Launcher: Set USE_LIBUV=0
-    Launcher->>Tuner: run_exp()
-    Tuner->>Parser: get_train_args(['yaml/qwen_toy.yaml'])
-    Parser->>Parser: Load YAML config
-    Parser-->>Tuner: Return parsed arguments
-    Tuner->>Workflow: run_sft(model_args, data_args, ...)
-
-    Workflow->>DataLoader: get_dataset()
-    DataLoader->>DataLoader: Load dataset_info.json
-    DataLoader->>DataLoader: Load JSONL file
-    DataLoader->>DataLoader: Apply chat template
-    DataLoader->>DataLoader: Tokenize
-    DataLoader-->>Workflow: Return processed dataset
-
-    Workflow->>ModelLoader: load_model()
-    ModelLoader->>ModelLoader: Load config.json
-    ModelLoader->>ModelLoader: Load model weights
-    ModelLoader->>GPU: Move model to cuda:0
-    ModelLoader-->>Workflow: Return model
-
-    Workflow->>Trainer: CustomSeq2SeqTrainer(model, dataset, args)
-    Trainer->>Trainer: Initialize optimizer
-    Trainer->>Trainer: Initialize scheduler
-    Trainer->>Trainer: train()
-
-    loop Training Loop (250 steps)
-        Trainer->>GPU: Forward pass
-        GPU-->>Trainer: Loss
-        Trainer->>GPU: Backward pass
-        GPU-->>Trainer: Gradients
-        Trainer->>Trainer: Optimizer step
-        Trainer->>Trainer: Scheduler step
-        alt Every 5 steps
-            Trainer->>User: Log metrics
-        end
-        alt Every 50 steps
-            Trainer->>Trainer: Save checkpoint
-        end
-    end
-
-    Trainer->>Trainer: Save final checkpoint
-    Trainer-->>User: Training complete
-```
-
----
-
-## File Structure & Paths
-
-### Directory Tree
-
-```
-LLaMA-Factory/
-├── src/
-│   └── llamafactory/
-│       ├── launcher.py                 # Entry point
-│       ├── train/
-│       │   ├── tuner.py               # Main training orchestrator
-│       │   └── sft/
-│       │       ├── workflow.py        # SFT workflow
-│       │       └── trainer.py         # Custom trainer
-│       ├── data/
-│       │   ├── loader.py              # Dataset loading
-│       │   ├── processor/
-│       │   │   └── supervised.py      # SFT data processing
-│       │   └── collator.py            # Batch collation
-│       ├── model/
-│       │   └── loader.py              # Model loading
-│       └── hparams/
-│           └── parser.py              # Argument parsing
-├── arpo_train_sft/
-│   ├── sft_train_toy.sh               # Training launch script
-│   ├── yaml/
-│   │   └── qwen_toy.yaml              # Training configuration
-│   ├── dataset_info/
-│   │   └── dataset_info.json          # Dataset registry
-│   └── checkpoints/
-│       └── qwen0.5b_toy/              # Output directory
-│           ├── checkpoint-50/
-│           ├── checkpoint-100/
-│           └── training.log
-├── data/
-│   └── final_sft_edition9_toy.jsonl   # Training dataset
-└── models/
-    └── Qwen2.5-0.5B-Instruct/         # Pre-trained model
-        ├── model.safetensors
-        ├── config.json
-        └── tokenizer files
-```
-
-### Path Resolution Examples
-
-**Working Directory**: `LLaMA-Factory/arpo_train_sft/`
-
-| Config Parameter | Relative Path | Resolves To |
-|-----------------|---------------|-------------|
-| `model_name_or_path: ../models/Qwen2.5-0.5B-Instruct` | From `arpo_train_sft/` | `LLaMA-Factory/models/Qwen2.5-0.5B-Instruct/` |
-| `dataset_dir: dataset_info` | From `arpo_train_sft/` | `LLaMA-Factory/arpo_train_sft/dataset_info/` |
-| `file_name: ../../data/final_sft_edition9_toy.jsonl` | From `dataset_info/` | `LLaMA-Factory/data/final_sft_edition9_toy.jsonl` |
-| `output_dir: checkpoints/qwen0.5b_toy` | From `arpo_train_sft/` | `LLaMA-Factory/arpo_train_sft/checkpoints/qwen0.5b_toy/` |
-| `TRAIN_SCRIPT: ../src/llamafactory/launcher.py` | From `arpo_train_sft/` | `LLaMA-Factory/src/llamafactory/launcher.py` |
-
----
-
-## Key Takeaways
-
-### Training Pipeline Summary
-
-1. **Initialization**: Bash script sets up environment and launches Python
-2. **Configuration**: YAML and JSON files parsed into Python dataclasses
-3. **Data Loading**: JSONL dataset loaded, templated, and tokenized
-4. **Model Loading**: Pre-trained Qwen model loaded to GPU in BF16
-5. **Training**: 250 steps of supervised learning with AdamW optimizer
-6. **Checkpointing**: Model saved every 50 steps + final checkpoint
-
-### Critical Configuration Points
-
-1. **Environment Variables**:
-   - `USE_LIBUV=0` - Essential for Windows PyTorch distributed
-   - `CUDA_VISIBLE_DEVICES=0` - Controls GPU selection
-
-2. **Path Configuration**:
-   - All paths are relative to working directory
-   - Dataset paths combine `dataset_dir` + `file_name`
-   - Model paths can be local or HuggingFace model IDs
-
-3. **Training Parameters**:
-   - Batch size determines memory usage
-   - Learning rate and scheduler control convergence
-   - Save/log frequency balances monitoring vs. disk space
-
-### Common Issues & Solutions
-
-| Issue | Root Cause | Solution |
-|-------|-----------|----------|
-| DeepSpeed not found | Config references DeepSpeed but not installed | Comment out `deepspeed` line in YAML |
-| Dataset not found | Incorrect path resolution | Fix `file_name` in `dataset_info.json` |
-| CUDA OOM | Batch size too large | Reduce `per_device_train_batch_size` |
-| USE_LIBUV error | PyTorch Windows incompatibility | Set `USE_LIBUV=0` in launcher.py and script |
-
----
-
-## Appendix: Full Configuration File
-
-### qwen_toy.yaml (Current Configuration)
-
-```yaml
-### model
-model_name_or_path: ../models/Qwen2.5-0.5B-Instruct
-trust_remote_code: true
-
-### method
-stage: sft
-do_train: true
-finetuning_type: full
-# deepspeed: ../examples/deepspeed/ds_z2_config.json  # Commented out - not installed
-
-### dataset
-dataset_dir: dataset_info
-dataset: arpo_sft_toy
-template: qwen
-cutoff_len: 4096
-max_samples: 500
-overwrite_cache: true
-preprocessing_num_workers: 4
-
-### output
-output_dir: checkpoints/qwen0.5b_toy
-logging_steps: 5
-save_steps: 50
-plot_loss: true
-overwrite_output_dir: true
-
-### train
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 1
-learning_rate: 7.0e-6
-num_train_epochs: 1.0
-lr_scheduler_type: cosine
-warmup_ratio: 0.1
-bf16: true
-ddp_timeout: 180000000
-```
-
-### dataset_info.json (arpo_sft_toy entry)
-
-```json
-{
-  "arpo_sft_toy": {
-    "file_name": "../../data/final_sft_edition9_toy.jsonl",
-    "formatting": "sharegpt",
-    "columns": {
-        "messages": "conversations",
-        "system": "system"
+    return {
+        'arpo': {'rewards': arpo_rewards, 'losses': arpo_losses},
+        'aepo': {'rewards': aepo_rewards, 'losses': aepo_losses}
     }
-  }
-}
+
+def plot_comparison(metrics):
+    """Plot reward and loss curves."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Plot rewards
+    ax1.plot(metrics['arpo']['rewards'], label='ARPO', linewidth=2)
+    ax1.plot(metrics['aepo']['rewards'], label='AEPO', linewidth=2)
+    ax1.set_xlabel('Training Step')
+    ax1.set_ylabel('Reward')
+    ax1.set_title('Training Reward Comparison')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # Plot losses
+    ax2.plot(metrics['arpo']['losses'], label='ARPO', linewidth=2)
+    ax2.plot(metrics['aepo']['losses'], label='AEPO', linewidth=2)
+    ax2.set_xlabel('Training Step')
+    ax2.set_ylabel('Loss')
+    ax2.set_title('Training Loss Comparison')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig('arpo_aepo_comparison.png', dpi=300)
+    print("Comparison plot saved to: arpo_aepo_comparison.png")
+
+def print_summary(metrics):
+    """Print summary statistics."""
+    print("\n" + "="*60)
+    print("Training Summary")
+    print("="*60)
+
+    for model in ['arpo', 'aepo']:
+        rewards = metrics[model]['rewards']
+        losses = metrics[model]['losses']
+
+        print(f"\n{model.upper()}:")
+        print(f"  Final Reward: {rewards[-1]:.4f}")
+        print(f"  Max Reward: {max(rewards):.4f}")
+        print(f"  Avg Reward (last 10 steps): {sum(rewards[-10:])/10:.4f}")
+        print(f"  Final Loss: {losses[-1]:.4f}")
+        print(f"  Min Loss: {min(losses):.4f}")
+
+if __name__ == "__main__":
+    metrics = load_training_logs(
+        arpo_log="/data/checkpoints/ARPO_Qwen2.5_7B_Reasoning/run.log",
+        aepo_log="/data/checkpoints/AEPO_Qwen2.5_7B_Reasoning/run.log"
+    )
+
+    print_summary(metrics)
+    plot_comparison(metrics)
 ```
 
----
+Run comparison:
 
-**Document Version**: 1.0
-**Last Updated**: 2025-11-10
-**Author**: ARPO Training Debug Session
-**Related Documents**:
-- `SFT_Toy_Training_Debug_Log.md` - Debugging issues encountered
-- `PyTorch_LIBUV_Windows_Fix.md` - Windows-specific fixes
-- `PyTorch_DLL_Error_Windows_Troubleshooting.md` - Installation issues
+```bash
+python scripts/compare_models.py
+```
+
+***
+
+## Troubleshooting
+
+### Local Toy Training Issues
+
+**Issue: 3B Model OOM**
+
+Symptoms:
+
+```
+RuntimeError: CUDA out of memory
+torch.cuda.OutOfMemoryError
+```
+
+Solution:
+
+1. Use 0.5B fallback script
+2. Or further reduce batch size in 3B script:
+
+   ```bash
+   TRAIN_BATCH_SIZE=2
+   PPO_MINI_BATCH_SIZE=1
+   ROLLOUT_N=2
+   ```
+
+**Issue: vLLM OOM**
+
+Symptoms:
+
+```
+RuntimeError: vLLM OOM during model loading
+```
+
+Solution:
+
+```bash
+# Reduce vLLM memory
+gpu_memory_utilization=0.3  # From 0.4
+```
+
+**Issue: Tool Execution Timeout**
+
+Symptoms:
+
+```
+WARNING: Python tool timeout (60s exceeded)
+```
+
+Solution:
+
+```bash
+# Increase timeout in config
+timeout: 120  # From 60
+```
+
+### Cluster Training Issues
+
+**Issue: Not All GPUs Active**
+
+Check:
+
+```bash
+nvidia-smi
+# Should show all 8 GPUs with activity
+```
+
+Solution:
+
+```bash
+# Verify N_GPUS_PER_NODE=8 in script
+# Check CUDA_VISIBLE_DEVICES not set
+```
+
+**Issue: Ray Cluster Fails to Start**
+
+Solution:
+
+```bash
+# Kill existing Ray
+ray stop --force
+
+# Clear Ray temp files
+rm -rf /tmp/ray
+
+# Restart training
+```
+
+**Issue: Reward Stays at 0**
+
+Check:
+
+```bash
+# Verify reward function path
+tail -100 /data/checkpoints/ARPO*/run.log | grep "reward"
+```
+
+Solution:
+
+```bash
+# Test reward function manually
+python -c "
+from verl.utils.reward_score.math import compute_score
+samples = [{'output': '<answer>42</answer>', 'answer': '42', 'data_source': 'gsm8k'}]
+print(compute_score(samples))  # Should be [1.0]
+"
+```
+
+**Issue: Training Diverges (Loss → NaN)**
+
+Solution:
+
+```bash
+# Reduce learning rate
+actor_rollout_ref.actor.optim.lr=5e-7  # From 1e-6
+
+# Enable gradient clipping
+actor_rollout_ref.actor.max_grad_norm=1.0
+
+# Reduce clip ratio
+actor_rollout_ref.actor.clip_ratio=0.1  # From 0.2
+```
+
+***
+
+## Summary Checklist
+
+### Local Toy Training ✓
+
+* [ ] Environment setup complete
+
+* [ ] Models downloaded (3B and 0.5B)
+
+* [ ] Toy dataset created (100 samples)
+
+* [ ] Search API configured
+
+* [ ] Training completed successfully
+
+* [ ] Noted which model worked (3B or 0.5B)
+
+### Cluster ARPO Training ✓
+
+* [ ] Environment setup on cluster
+
+* [ ] 7B model downloaded/SFT checkpoint available
+
+* [ ] Full dataset downloaded (10K samples)
+
+* [ ] Search API configured
+
+* [ ] Training completed (2 epochs)
+
+* [ ] Checkpoint converted to HF format
+
+* [ ] Model loads and generates successfully
+
+### Cluster AEPO Training ✓
+
+* [ ] AEPO environment setup
+
+* [ ] AEPO script configured
+
+* [ ] Training completed (2 epochs)
+
+* [ ] Checkpoint converted to HF format
+
+* [ ] Model loads and generates successfully
+
+### Verification ✓
+
+* [ ] Both models tested with sample prompts
+
+* [ ] Tool usage verified (Python and Search)
+
+* [ ] Training curves compared
+
+* [ ] Final rewards compared
+
+* [ ] Models ready for full evaluation
+
+***
+
+## Next Steps
+
+With both ARPO and AEPO models trained and verified, you can now:
+
+1. **Evaluate on 13 Benchmarks**: Use the evaluation pipeline to test on AIME, MATH500, GSM8K, HotpotQA, 2Wiki, Musique, Bamboogle, GAIA, HLE, etc.
+
+2. **Fine-tune Further**: If performance is below target, consider:
+
+   * More training epochs
+
+   * Different hyperparameters
+
+   * Larger model (14B)
+
+3. **Deploy**: Use the HF checkpoints for inference or API deployment
+
+***
+
+## Quick Reference Commands
+
+**Local Toy Training:**
+
+```bash
+cd ARPO/ARPO
+conda activate arpo
+bash scripts/ARPO_3B_Toy_Local.sh  # Try 3B first
+# If OOM:
+bash scripts/ARPO_0.5B_Toy_Local.sh  # Fallback to 0.5B
+```
+
+**Cluster ARPO Training:**
+
+```bash
+ssh user@cluster
+cd ~/ARPO/ARPO
+conda activate arpo
+tmux new -s arpo_training
+bash scripts/ARPO_7B_Production_Cluster.sh
+```
+
+**Cluster AEPO Training:**
+
+```bash
+cd ~/ARPO/AEPO
+conda activate aepo
+tmux new -s aepo_training
+bash scripts/AEPO_7B_Production_Cluster.sh
+```
+
+**Monitor Training:**
+
+```bash
+watch -n 1 nvidia-smi
+tail -f /data/checkpoints/ARPO*/run.log
+tmux attach -t arpo_training
+```
+
+**Convert Checkpoints:**
+
+```bash
+cd ARPO/merge_ckpt
+bash convert_checkpoint_from_verl_to_hf_qwen3.sh
+```
+
+**Test Models:**
+
+```bash
+python scripts/test_arpo_model.py
+python scripts/compare_models.py
+```
+
+***
+
+**Congratulations!** You now have a complete end-to-end RL training pipeline from local testing to production deployment. Both ARPO and AEPO models are ready for evaluation and deployment.

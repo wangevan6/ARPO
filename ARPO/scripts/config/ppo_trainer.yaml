@@ -168,8 +168,8 @@ actor_rollout_ref:
         search:
           class_path: verl.workers.rollout.tools.search_tool.BingSearchTool
           params:
-            api_key: <your_api_key>
-            zone: <your_zone>
+            api_key: 2e1ce5909f8fe768882fcb1a1ca38052e2eecffc560ec94e0b96e1e7d2bfc731
+            zone: serp_api1
             max_results: 10
             result_length: 1000
             location: cn

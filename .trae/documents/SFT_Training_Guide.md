@@ -12,7 +12,7 @@
 8. [Checkpoint Management](#checkpoint-management)
 9. [Troubleshooting](#troubleshooting)
 
----
+***
 
 ## Overview
 
@@ -20,11 +20,15 @@ This guide provides a comprehensive, step-by-step walkthrough for reproducing th
 
 ### What You'll Accomplish
 
-- Set up the LLaMA-Factory training environment
-- Prepare the ARPO-SFT-54K dataset
-- Configure training hyperparameters
-- Execute distributed training with DeepSpeed
-- Obtain an SFT checkpoint ready for RL training
+* Set up the LLaMA-Factory training environment
+
+* Prepare the ARPO-SFT-54K dataset
+
+* Configure training hyperparameters
+
+* Execute distributed training with DeepSpeed
+
+* Obtain an SFT checkpoint ready for RL training
 
 ### Training Workflow
 
@@ -42,36 +46,47 @@ graph LR
     style G fill:#fff9c4
 ```
 
----
+***
 
 ## Prerequisites
 
 ### Hardware Requirements
 
 **Minimum**:
-- 8x NVIDIA GPUs (24GB VRAM each, e.g., RTX 3090/4090)
-- 256GB System RAM
-- 500GB SSD storage
+
+* 8x NVIDIA GPUs (24GB VRAM each, e.g., RTX 3090/4090)
+
+* 256GB System RAM
+
+* 500GB SSD storage
 
 **Recommended**:
-- 8x NVIDIA A100 (40GB/80GB)
-- 512GB System RAM
-- 1TB NVMe SSD
+
+* 8x NVIDIA A100 (40GB/80GB)
+
+* 512GB System RAM
+
+* 1TB NVMe SSD
 
 ### Software Requirements
 
-- **OS**: Linux (Ubuntu 20.04/22.04 recommended)
-- **CUDA**: 11.8 or 12.1
-- **Python**: 3.10
-- **Git**: Latest version
+* **OS**: Linux (Ubuntu 20.04/22.04 recommended)
+
+* **CUDA**: 11.8 or 12.1
+
+* **Python**: 3.10
+
+* **Git**: Latest version
 
 ### Access Requirements
 
-- HuggingFace account (for model download)
-- HuggingFace token with read access
-- Sufficient disk space for base model and checkpoints
+* HuggingFace account (for model download)
 
----
+* HuggingFace token with read access
+
+* Sufficient disk space for base model and checkpoints
+
+***
 
 ## Environment Setup
 
@@ -143,7 +158,7 @@ ds_report
 # This should show CUDA ops compiled successfully
 ```
 
----
+***
 
 ## Data Preparation
 
@@ -171,7 +186,7 @@ print(f'Downloaded {len(dataset[\"train\"])} samples')
 
 **Option B: Manual Download**
 
-1. Visit https://huggingface.co/datasets/dongguanting/ARPO-SFT-54K
+1. Visit <https://huggingface.co/datasets/dongguanting/ARPO-SFT-54K>
 2. Download `train.json`
 3. Place in `LLaMA-Factory/data/final_sft_edition9.json`
 
@@ -188,6 +203,7 @@ with open('data/final_sft_edition9.json') as f:
 ```
 
 **Expected Format**:
+
 ```json
 {
   "conversations": [
@@ -257,7 +273,7 @@ print(f'First sample keys: {dataset[0].keys()}')
 "
 ```
 
----
+***
 
 ## Configuration
 
@@ -359,9 +375,12 @@ The default DeepSpeed config `examples/deepspeed/ds_z3_config.json` is optimized
 ```
 
 **Key Parameters**:
-- `stage: 3`: Maximum memory optimization (parameters, gradients, optimizer states sharded)
-- `offload_optimizer/param`: Offload to CPU (reduce GPU memory)
-- `stage3_gather_16bit_weights_on_model_save`: Save full precision weights
+
+* `stage: 3`: Maximum memory optimization (parameters, gradients, optimizer states sharded)
+
+* `offload_optimizer/param`: Offload to CPU (reduce GPU memory)
+
+* `stage3_gather_16bit_weights_on_model_save`: Save full precision weights
 
 ### Step 4: Create Training Launch Script
 
@@ -408,11 +427,12 @@ echo "Training completed!"
 ```
 
 Make it executable:
+
 ```bash
 chmod +x arpo_train_sft/sft_train.sh
 ```
 
----
+***
 
 ## Training Execution
 
@@ -446,26 +466,39 @@ bash sft_train.sh
 **What Happens Next**:
 
 1. **Initialization** (1-2 minutes):
-   - Load configuration
-   - Initialize distributed training
-   - Download/load base model
-   - Load and tokenize dataset
 
-2. **Training Loop** (~6-12 hours for 3 epochs):
-   - Forward pass
-   - Backward pass
-   - Gradient synchronization
-   - Optimizer step
-   - Periodic checkpointing
+   * Load configuration
+
+   * Initialize distributed training
+
+   * Download/load base model
+
+   * Load and tokenize dataset
+
+2. **Training Loop** (\~6-12 hours for 3 epochs):
+
+   * Forward pass
+
+   * Backward pass
+
+   * Gradient synchronization
+
+   * Optimizer step
+
+   * Periodic checkpointing
 
 3. **Completion**:
-   - Save final checkpoint
-   - Generate training metrics
-   - Create loss plot
+
+   * Save final checkpoint
+
+   * Generate training metrics
+
+   * Create loss plot
 
 ### Step 3: Expected Output
 
 **Initialization Logs**:
+
 ```
 Loading checkpoint shards: 100%|████████| 4/4 [00:10<00:00,  2.51s/it]
 trainable params: 7,615,616,000 || all params: 7,615,616,000 || trainable%: 100.0000
@@ -475,6 +508,7 @@ Total optimization steps: 10125
 ```
 
 **Training Logs**:
+
 ```
 {'loss': 1.2345, 'learning_rate': 6.8e-06, 'epoch': 0.05, 'step': 10}
 {'loss': 1.1234, 'learning_rate': 6.9e-06, 'epoch': 0.10, 'step': 20}
@@ -483,25 +517,28 @@ Total optimization steps: 10125
 ```
 
 **Checkpoint Logs**:
+
 ```
 Saving model checkpoint to checkpoints/qwen2.5-7b-sft/checkpoint-2000
 Saving model checkpoint to checkpoints/qwen2.5-7b-sft/checkpoint-4000
 ...
 ```
 
----
+***
 
 ## Monitoring and Debugging
 
 ### Real-time Monitoring
 
 **Option 1: Watch Training Log**
+
 ```bash
 # In a separate terminal
 tail -f checkpoints/qwen2.5-7b-sft/training.log
 ```
 
 **Option 2: Monitor GPU Usage**
+
 ```bash
 # In a separate terminal
 watch -n 1 nvidia-smi
@@ -527,18 +564,20 @@ wandb login
 1. **Training Loss**: Should decrease steadily (expect 0.3-0.5 final loss)
 2. **Learning Rate**: Should follow cosine schedule (peak at warmup end, decay to 0)
 3. **GPU Memory**: Should be stable (no OOM errors)
-4. **Training Speed**: ~30-60 seconds per step (depends on hardware)
+4. **Training Speed**: \~30-60 seconds per step (depends on hardware)
 
 ### Debugging Common Issues
 
 **Issue 1: Out of Memory (OOM)**
 
 **Symptoms**:
+
 ```
 RuntimeError: CUDA out of memory
 ```
 
 **Solutions**:
+
 ```yaml
 # Reduce batch size
 per_device_train_batch_size: 1  # Already at minimum
@@ -560,6 +599,7 @@ gradient_checkpointing: true
 **Symptoms**: Training takes >2 minutes per step
 
 **Solutions**:
+
 ```yaml
 # Reduce preprocessing workers if CPU-bound
 preprocessing_num_workers: 8  # From 16 to 8
@@ -574,11 +614,13 @@ overwrite_cache: false
 **Issue 3: DeepSpeed Initialization Failure**
 
 **Symptoms**:
+
 ```
 AssertionError: DeepSpeed Zero-3 is not compatible with ...
 ```
 
 **Solutions**:
+
 ```bash
 # Reinstall DeepSpeed
 pip uninstall deepspeed
@@ -594,11 +636,13 @@ deepspeed: ../examples/deepspeed/ds_z2_config.json
 **Issue 4: Dataset Loading Error**
 
 **Symptoms**:
+
 ```
 FileNotFoundError: data/final_sft_edition9.json not found
 ```
 
 **Solutions**:
+
 ```bash
 # Check file path
 ls -lh data/final_sft_edition9.json
@@ -611,7 +655,7 @@ cd arpo_train_sft
 ls -lh ../data/final_sft_edition9.json
 ```
 
----
+***
 
 ## Checkpoint Management
 
@@ -649,6 +693,7 @@ resume_from_checkpoint: checkpoints/qwen2.5-7b-sft/checkpoint-4000
 ```
 
 Or specify in command line:
+
 ```bash
 # Modify launcher.py call in sft_train.sh
 torchrun ... $SCRIPT_PATH $CONFIG_FILE \
@@ -682,7 +727,7 @@ cp checkpoints/qwen2.5-7b-sft/config.json checkpoints/qwen2.5-7b-sft-fp32/
 cp checkpoints/qwen2.5-7b-sft/tokenizer* checkpoints/qwen2.5-7b-sft-fp32/
 ```
 
----
+***
 
 ## Troubleshooting
 
@@ -691,6 +736,7 @@ cp checkpoints/qwen2.5-7b-sft/tokenizer* checkpoints/qwen2.5-7b-sft-fp32/
 **Cause**: Distributed training communication failure
 
 **Solution**:
+
 ```bash
 # Check if port is in use
 netstat -tuln | grep 29500
@@ -707,6 +753,7 @@ sudo ufw allow 29500/tcp
 **Cause**: Batch contains sequences exceeding max length
 
 **Solution**:
+
 ```yaml
 # Increase cutoff_len (may increase memory usage)
 cutoff_len: 20000
@@ -718,11 +765,13 @@ cutoff_len: 20000
 ### Problem: Loss Not Decreasing
 
 **Possible Causes**:
+
 1. Learning rate too high/low
 2. Data quality issues
 3. Model already converged
 
 **Solutions**:
+
 ```yaml
 # Try different learning rates
 learning_rate: 5.0e-6  # Lower
@@ -738,6 +787,7 @@ learning_rate: 1.0e-5  # Higher
 ### Problem: Checkpoints Taking Too Much Space
 
 **Solutions**:
+
 ```bash
 # Remove intermediate checkpoints (keep every N)
 cd checkpoints/qwen2.5-7b-sft
@@ -752,6 +802,7 @@ save_strategy: epoch  # Save once per epoch instead of every N steps
 **Cause**: Missing tokenizer files
 
 **Solution**:
+
 ```bash
 # Copy tokenizer from base model
 cp models/Qwen2.5-7B-Instruct/tokenizer* checkpoints/qwen2.5-7b-sft/
@@ -761,13 +812,14 @@ ls checkpoints/qwen2.5-7b-sft/
 # Should see: config.json, model.safetensors, tokenizer.json, etc.
 ```
 
----
+***
 
 ## Validation and Next Steps
 
 ### Validate SFT Checkpoint
 
 **Test Loading**:
+
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -788,6 +840,7 @@ print(f"Vocab size: {len(tokenizer)}")
 ```
 
 **Test Generation**:
+
 ```python
 # Test tool-augmented generation
 prompt = "What is 123 * 456?"
@@ -808,6 +861,7 @@ print(response)
 ```
 
 **Expected Output** (should contain tool usage):
+
 ```
 <think>I need to multiply 123 and 456</think>
 <python>
@@ -823,7 +877,7 @@ Once SFT is complete and validated:
 2. Proceed to RL training guide: `RL_Training_Guide.md`
 3. Use SFT checkpoint as `actor_rollout_ref.model.path` in RL config
 
----
+***
 
 ## Appendix: Hyperparameter Tuning Guide
 
@@ -881,22 +935,27 @@ weight_decay: 0.01
 # attention_dropout: 0.1
 ```
 
----
+***
 
 ## Summary Checklist
 
 Before starting RL training, ensure:
 
-- [ ] SFT training completed without errors
-- [ ] Final checkpoint exists: `checkpoints/qwen2.5-7b-sft/model.safetensors`
-- [ ] Tokenizer files copied to checkpoint directory
-- [ ] Model can be loaded and generates coherent tool-augmented responses
-- [ ] Training loss decreased to <0.5
-- [ ] Checkpoint path noted for RL config
+* [ ] SFT training completed without errors
+
+* [ ] Final checkpoint exists: `checkpoints/qwen2.5-7b-sft/model.safetensors`
+
+* [ ] Tokenizer files copied to checkpoint directory
+
+* [ ] Model can be loaded and generates coherent tool-augmented responses
+
+* [ ] Training loss decreased to <0.5
+
+* [ ] Checkpoint path noted for RL config
 
 **Congratulations!** You've successfully completed the SFT stage. Your model is now ready for reinforcement learning training.
 
----
+***
 
 ## Quick Reference Commands
 
