@@ -54,7 +54,7 @@
 
 
 ## 📣 Latest News
-
+- **[Nov 03, 2025]**: The brief introduction of AEPO can be found on a series of platforms like **[X](https://x.com/_akhaliq/status/1979203620244447248), [WeChat](https://mp.weixin.qq.com/s/mL3CTNonZVoLWnQVfK7KAw)**.
 - **[Oct 17, 2025]**: 📄 Our paper is now available on **[arXiv](https://arxiv.org/abs/2510.14545)** and **[Hugging Face](https://huggingface.co/papers/2510.14545)** daily paper.
 - **[Oct 16, 2025]**: 🚀🚀🚀 We propose a new algorithm **AEPO**, which focused on entropy-balanced agentic RL and consistently outperforms ARPO on datasets like GAIA, HLE, and AIME. Full [codebase](https://github.com/RUC-NLPIR/ARPO/tree/main/AEPO) and [🤗 HF-Models](https://huggingface.co/collections/dongguanting/aepo-68ef6832c99697ee03d5e1c7) of AEPO released.
 - **[Aug 11, 2025]**: The brief introduction of ARPO can be found on a series of platforms like **[X](https://x.com/kakakbibibi/status/1950211490943832393), [WeChat](https://mp.weixin.qq.com/s/mFNRs-bHCAAe3x4QZHF8aA), [Zhihu](https://zhuanlan.zhihu.com/p/1938022709545141501), [YouTube](https://www.youtube.com/watch?v=FOK2tRtq7TE) and [Xiaohongshu](https://www.xiaohongshu.com/explore/68885b6b000000002501bb5e?xsec_token=ABhbOv-GAqL62zxhidTntouIOJqDraaIMAUINlNUWmEtU=&xsec_source=pc_user)**.
@@ -273,7 +273,7 @@ conda create -n arpo python==3.10
 conda activate arpo
 
 # install torch & flash-atten
-pip3 install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+pip3 install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 pip3 install flash-attn --no-build-isolation
 
 # install RL basic env
@@ -908,15 +908,35 @@ If you find this work helpful, please cite our paper:
   bibsource    = {dblp computer science bibliography, https://dblp.org}
 }
 
-@misc{dong2025aepo,
-      title={Agentic Entropy-Balanced Policy Optimization}, 
-      author={Guanting Dong and Licheng Bao and Zhongyuan Wang and Kangzhi Zhao and Xiaoxi Li and Jiajie Jin and Jinghan Yang and Hangyu Mao and Fuzheng Zhang and Kun Gai and Guorui Zhou and Yutao Zhu and Ji-Rong Wen and Zhicheng Dou},
-      year={2025},
-      eprint={2510.14545},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2510.14545}, 
+
+@article{dong2025aepo,
+  author       = {Guanting Dong and
+                  Licheng Bao and
+                  Zhongyuan Wang and
+                  Kangzhi Zhao and
+                  Xiaoxi Li and
+                  Jiajie Jin and
+                  Jinghan Yang and
+                  Hangyu Mao and
+                  Fuzheng Zhang and
+                  Kun Gai and
+                  Guorui Zhou and
+                  Yutao Zhu and
+                  Ji{-}Rong Wen and
+                  Zhicheng Dou},
+  title        = {Agentic Entropy-Balanced Policy Optimization},
+  journal      = {CoRR},
+  volume       = {abs/2510.14545},
+  year         = {2025},
+  url          = {https://doi.org/10.48550/arXiv.2510.14545},
+  doi          = {10.48550/ARXIV.2510.14545},
+  eprinttype    = {arXiv},
+  eprint       = {2510.14545},
+  timestamp    = {Fri, 14 Nov 2025 15:17:45 +0100},
+  biburl       = {https://dblp.org/rec/journals/corr/abs-2510-14545.bib},
+  bibsource    = {dblp computer science bibliography, https://dblp.org}
 }
+
 
 @article{dong2025tool,
   author       = {Guanting Dong and
